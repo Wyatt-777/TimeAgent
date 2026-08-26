@@ -27,9 +27,27 @@ def test_explicit_approval_flag_overrides_allowlist() -> None:
     assert result.can_execute is False
 
 
-@pytest.mark.parametrize("action", ["delete_file", "commit", "push", "install_package", "kill_process"])
+@pytest.mark.parametrize(
+    "action",
+    [
+        "delete_file",
+        "commit",
+        "push",
+        "install_package",
+        "send_message",
+        "kill_process",
+        "modify_system",
+    ],
+)
 def test_side_effecting_action_requires_approval(action: str) -> None:
     result = ApprovalPolicy().evaluate(decision(action))
+
+    assert result.status is ApprovalStatus.REQUIRES_APPROVAL
+    assert result.can_execute is False
+
+
+def test_high_risk_action_cannot_be_added_to_auto_allowlist() -> None:
+    result = ApprovalPolicy(auto_allowed={"push"}).evaluate(decision("push"))
 
     assert result.status is ApprovalStatus.REQUIRES_APPROVAL
     assert result.can_execute is False

@@ -66,6 +66,7 @@ class ApprovalPolicy:
             "modify_system",
         }
     )
+    MANDATORY_APPROVAL = DEFAULT_APPROVAL_REQUIRED
 
     def __init__(
         self,
@@ -90,6 +91,8 @@ class ApprovalPolicy:
             return ApprovalResult(action, ApprovalStatus.DENIED, "empty actions are denied")
         if decision.requires_approval:
             return ApprovalResult(action, ApprovalStatus.REQUIRES_APPROVAL, "decision requests approval")
+        if action in self.MANDATORY_APPROVAL:
+            return ApprovalResult(action, ApprovalStatus.REQUIRES_APPROVAL, "high-risk action always requires explicit user approval")
         if action in self.auto_allowed:
             return ApprovalResult(action, ApprovalStatus.ALLOWED, "action is on the read-only allowlist")
         if action in self.approval_required:

@@ -1,3 +1,5 @@
+import pytest
+
 from agent.approval import ApprovalStatus
 from agent.decision import DecisionImportance, StructuredDecision
 from agent.executor import ActionExecutor, ExecutionStatus
@@ -38,11 +40,23 @@ def test_unregistered_allowlisted_action_is_not_executed() -> None:
     assert result.error == "action has no registered handler"
 
 
-def test_side_effecting_action_is_blocked_before_handler_invocation() -> None:
+@pytest.mark.parametrize(
+    "action",
+    [
+        "delete_file",
+        "commit",
+        "push",
+        "install_package",
+        "send_message",
+        "kill_process",
+        "modify_system",
+    ],
+)
+def test_side_effecting_action_is_blocked_before_handler_invocation(action: str) -> None:
     calls: list[str] = []
-    executor = ActionExecutor(handlers={"delete_file": lambda _: calls.append("called")})
+    executor = ActionExecutor(handlers={action: lambda _: calls.append("called")})
 
-    result = executor.execute(decision("delete_file"))
+    result = executor.execute(decision(action))
 
     assert result.execution_status is ExecutionStatus.BLOCKED
     assert result.approval.status is ApprovalStatus.REQUIRES_APPROVAL

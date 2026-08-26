@@ -51,6 +51,8 @@ def test_context_package_is_bounded_and_read_only() -> None:
 
     assert "read-only" in prompt
     assert "Do not edit files" in prompt
+    for forbidden in ("commit", "push", "install packages", "send messages"):
+        assert forbidden in prompt
     assert package.to_dict()["task"]["status"] == "pending"
 
 
