@@ -1,6 +1,7 @@
 """Optional Agent Brain components."""
 
 from .context_builder import AgentContext, ContextBuilder
+from .approval import ApprovalPolicy, ApprovalResult, ApprovalStatus
 from .decision import (
     DecisionImportance,
     DecisionParseError,
@@ -19,6 +20,9 @@ from .provider import (
 __all__ = [
     "AgentContext",
     "ContextBuilder",
+    "ApprovalPolicy",
+    "ApprovalResult",
+    "ApprovalStatus",
     "DecisionImportance",
     "DecisionParseError",
     "StructuredDecision",
