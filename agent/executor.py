@@ -7,6 +7,7 @@ from enum import Enum
 from typing import Any, Callable, Mapping
 
 from .approval import ApprovalPolicy, ApprovalResult, ApprovalStatus
+from .audit_log import AuditLog
 from .decision import StructuredDecision
 
 
@@ -56,8 +57,10 @@ class ActionExecutor:
         *,
         policy: ApprovalPolicy | None = None,
         handlers: Mapping[str, ActionHandler] | None = None,
+        audit_log: AuditLog | None = None,
     ) -> None:
         self.policy = policy or ApprovalPolicy()
+        self.audit_log = audit_log
         self._handlers: dict[str, ActionHandler] = {}
         for action, handler in (handlers or {}).items():
             self.register(action, handler)
@@ -74,36 +77,77 @@ class ActionExecutor:
         decision: StructuredDecision,
         *,
         context: Mapping[str, Any] | None = None,
+        trigger: str = "agent_decision",
+        audit_metadata: Mapping[str, Any] | None = None,
     ) -> ActionExecutionResult:
         approval = self.policy.evaluate(decision)
         if approval.status is not ApprovalStatus.ALLOWED:
-            return ActionExecutionResult(
+            return self._finish(
+                decision,
+                ActionExecutionResult(
                 action=approval.action,
                 execution_status=ExecutionStatus.BLOCKED,
                 approval=approval,
+                ),
+                trigger=trigger,
+                audit_metadata=audit_metadata,
             )
 
         handler = self._handlers.get(approval.action or "")
         if handler is None:
-            return ActionExecutionResult(
+            return self._finish(
+                decision,
+                ActionExecutionResult(
                 action=approval.action,
                 execution_status=ExecutionStatus.NOT_REGISTERED,
                 approval=approval,
                 error="action has no registered handler",
+                ),
+                trigger=trigger,
+                audit_metadata=audit_metadata,
             )
 
         try:
             value = handler(dict(context or {}))
         except Exception as exc:  # handler failures must not crash the runtime
-            return ActionExecutionResult(
+            return self._finish(
+                decision,
+                ActionExecutionResult(
                 action=approval.action,
                 execution_status=ExecutionStatus.FAILED,
                 approval=approval,
                 error=f"{type(exc).__name__}: {exc}",
+                ),
+                trigger=trigger,
+                audit_metadata=audit_metadata,
             )
-        return ActionExecutionResult(
-            action=approval.action,
-            execution_status=ExecutionStatus.COMPLETED,
-            approval=approval,
-            value=value,
+        return self._finish(
+            decision,
+            ActionExecutionResult(
+                action=approval.action,
+                execution_status=ExecutionStatus.COMPLETED,
+                approval=approval,
+                value=value,
+            ),
+            trigger=trigger,
+            audit_metadata=audit_metadata,
         )
+
+    def _finish(
+        self,
+        decision: StructuredDecision,
+        result: ActionExecutionResult,
+        *,
+        trigger: str,
+        audit_metadata: Mapping[str, Any] | None,
+    ) -> ActionExecutionResult:
+        if self.audit_log is not None:
+            self.audit_log.record_execution(
+                decision=decision,
+                approval=result.approval,
+                execution_status=result.execution_status.value,
+                trigger=trigger,
+                error=result.error,
+                metadata=audit_metadata,
+            )
+        return result

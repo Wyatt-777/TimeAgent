@@ -2,6 +2,7 @@
 
 from .context_builder import AgentContext, ContextBuilder
 from .approval import ApprovalPolicy, ApprovalResult, ApprovalStatus
+from .audit_log import AuditLog, AuditLogError, AuditRecord
 from .decision import (
     DecisionImportance,
     DecisionParseError,
@@ -24,6 +25,9 @@ __all__ = [
     "ApprovalPolicy",
     "ApprovalResult",
     "ApprovalStatus",
+    "AuditLog",
+    "AuditLogError",
+    "AuditRecord",
     "DecisionImportance",
     "DecisionParseError",
     "StructuredDecision",
