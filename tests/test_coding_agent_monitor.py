@@ -4,11 +4,18 @@ from config.settings import CodingAgentMonitorSettings
 from core.event import EventType, Priority
 from core.event_bus import EventBus
 from sensors.coding_agent_monitor import CodingAgentMonitor
+from workspace.resolver import WorkspaceResolver
 
 
 class FakeProcess:
-    def __init__(self, info):
+    def __init__(self, info, cwd=None):
         self.info = info
+        self._cwd = cwd
+
+    def cwd(self):
+        if self._cwd is None:
+            raise psutil.AccessDenied(pid=self.info.get("pid"))
+        return self._cwd
 
 
 class DeniedProcess:
@@ -89,3 +96,18 @@ def test_disabled_monitor_does_not_start_thread() -> None:
     monitor.start()
 
     assert monitor._thread is None
+
+
+def test_monitor_attaches_only_configured_project_root(monkeypatch, tmp_path) -> None:
+    project = tmp_path / "project"
+    process = FakeProcess(
+        {"pid": 10, "name": "codex.exe", "create_time": 1.0},
+        cwd=str(project / "src"),
+    )
+    snapshots = [[process], [process]]
+    monkeypatch.setattr("sensors.coding_agent_monitor.psutil.process_iter", lambda _attrs: snapshots.pop(0))
+    monitor = CodingAgentMonitor(workspace_resolver=WorkspaceResolver([project]))
+
+    monitor.scan_once()
+
+    assert monitor.active_sessions()[0].project_path == str(project.resolve())

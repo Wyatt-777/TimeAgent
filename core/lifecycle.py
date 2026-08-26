@@ -43,10 +43,15 @@ class Runtime:
             from sensors.file_monitor import FileMonitor
             from sensors.process_monitor import ProcessMonitor
             from sensors.window_monitor import WindowMonitor
+            from workspace.resolver import WorkspaceResolver
 
             sensors = (
                 ProcessMonitor(self.event_bus, settings.process_monitor),
-                CodingAgentMonitor(self.event_bus, settings.coding_agent_monitor),
+                CodingAgentMonitor(
+                    self.event_bus,
+                    settings.coding_agent_monitor,
+                    workspace_resolver=WorkspaceResolver(settings.file_monitor.paths),
+                ),
                 FileMonitor(self.event_bus, settings.file_monitor),
                 WindowMonitor(self.event_bus, settings.window_monitor),
             )

@@ -14,6 +14,7 @@ import psutil
 from config.settings import CodingAgentMonitorSettings
 from core.event import Event, EventType, Priority
 from core.event_bus import EventBus
+from workspace.resolver import WorkspaceResolver
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +22,7 @@ class CodingAgentProcess:
     pid: int
     name: str
     create_time: float | None
+    cwd: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,6 +31,7 @@ class CodingAgentSession:
     agent_name: str
     pid: int
     started_at: datetime
+    project_path: str | None = None
     ended_at: datetime | None = None
 
     @property
@@ -45,9 +48,11 @@ class CodingAgentMonitor:
         self,
         event_bus: EventBus | None = None,
         settings: CodingAgentMonitorSettings | None = None,
+        workspace_resolver: WorkspaceResolver | None = None,
     ) -> None:
         self.event_bus = event_bus
         self.settings = settings or CodingAgentMonitorSettings()
+        self.workspace_resolver = workspace_resolver
         self._known: dict[int, CodingAgentProcess] | None = None
         self._active: dict[int, CodingAgentSession] = {}
         self._stop_event = ThreadEvent()
@@ -114,7 +119,7 @@ class CodingAgentMonitor:
         names = {name.casefold() for name in self.settings.process_names}
         result: dict[int, CodingAgentProcess] = {}
         try:
-            processes: Iterable[psutil.Process] = psutil.process_iter(["pid", "name", "create_time"])
+            processes: Iterable[psutil.Process] = psutil.process_iter(["pid", "name", "create_time", "cwd"])
             for process in processes:
                 try:
                     info = process.info
@@ -127,6 +132,7 @@ class CodingAgentMonitor:
                         pid=pid,
                         name=name,
                         create_time=float(create_time) if create_time is not None else None,
+                        cwd=_process_cwd(process, info),
                     )
                 except (psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess, OSError, TypeError, ValueError):
                     continue
@@ -134,13 +140,18 @@ class CodingAgentMonitor:
             return result
         return result
 
-    @staticmethod
-    def _new_session(process: CodingAgentProcess, *, started_at: datetime) -> CodingAgentSession:
+    def _new_session(self, process: CodingAgentProcess, *, started_at: datetime) -> CodingAgentSession:
+        project_path = None
+        if self.workspace_resolver is not None:
+            match = self.workspace_resolver.resolve(process.cwd)
+            if match is not None:
+                project_path = str(match.workspace.path)
         return CodingAgentSession(
             session_id=f"session_{uuid4().hex}",
             agent_name=process.name,
             pid=process.pid,
             started_at=started_at,
+            project_path=project_path,
         )
 
     @staticmethod
@@ -152,6 +163,8 @@ class CodingAgentMonitor:
             "pid": session.pid,
             "started_at": session.started_at.isoformat(),
         }
+        if session.project_path is not None:
+            data["project_path"] = session.project_path
         if event_type is EventType.CODING_SESSION_FINISHED:
             finished = replace(session, ended_at=ended_at)
             data.update(
@@ -182,3 +195,14 @@ def _identity_changed(previous: CodingAgentProcess, current: CodingAgentProcess)
         and current.create_time is not None
         and previous.create_time != current.create_time
     )
+
+
+def _process_cwd(process: psutil.Process, info: dict[str, object]) -> str | None:
+    cwd = info.get("cwd")
+    if isinstance(cwd, str) and cwd.strip():
+        return cwd
+    try:
+        value = process.cwd()
+    except (AttributeError, psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess, OSError):
+        return None
+    return value if isinstance(value, str) and value.strip() else None
