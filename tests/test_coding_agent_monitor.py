@@ -123,7 +123,7 @@ def test_monitor_does_not_request_cwd_for_every_process(monkeypatch) -> None:
 
     CodingAgentMonitor().scan_once()
 
-    assert requested == [("pid", "name", "create_time")]
+    assert requested == [("pid", "name")]
 
 
 def test_monitor_persists_active_and_finished_sessions(monkeypatch, tmp_path) -> None:

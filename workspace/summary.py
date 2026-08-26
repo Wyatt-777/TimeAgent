@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-
-from sensors.coding_agent_monitor import CodingAgentSession
+from typing import TYPE_CHECKING
 
 from .git import GitDiffStat, GitStatus
 from .tests import TestRunResult
+
+if TYPE_CHECKING:
+    from sensors.coding_agent_monitor import CodingAgentSession
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +77,8 @@ class SessionSummaryBuilder:
         diff_stat: GitDiffStat | None = None,
         test_result: TestRunResult | None = None,
     ) -> CodingSessionSummary:
+        from sensors.coding_agent_monitor import CodingAgentSession
+
         if not isinstance(session, CodingAgentSession):
             raise TypeError("session must be a CodingAgentSession")
         attention: list[str] = []

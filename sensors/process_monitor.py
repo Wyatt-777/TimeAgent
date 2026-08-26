@@ -80,13 +80,16 @@ class ProcessMonitor:
         result: dict[int, ProcessInfo] = {}
         try:
             processes: Iterable[psutil.Process] = psutil.process_iter(
-                ["pid", "name", "create_time"]
+                ["pid", "name"]
             )
             for process in processes:
                 try:
                     info = process.info
                     pid = int(info["pid"])
                     name = str(info.get("name") or "<unknown>")
+                    # Keep the general process scan lightweight. PID/name are
+                    # sufficient for lifecycle detection; the Coding Agent
+                    # monitor retains create_time for the few matched agents.
                     create_time = info.get("create_time")
                     result[pid] = ProcessInfo(
                         pid=pid,

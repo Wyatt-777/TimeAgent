@@ -136,7 +136,7 @@ class CodingAgentMonitor:
         names = {name.casefold() for name in self.settings.process_names}
         result: dict[int, CodingAgentProcess] = {}
         try:
-            processes: Iterable[psutil.Process] = psutil.process_iter(["pid", "name", "create_time"])
+            processes: Iterable[psutil.Process] = psutil.process_iter(["pid", "name"])
             for process in processes:
                 try:
                     info = process.info
@@ -145,6 +145,11 @@ class CodingAgentMonitor:
                         continue
                     pid = int(info["pid"])
                     create_time = info.get("create_time")
+                    if create_time is None:
+                        try:
+                            create_time = process.create_time()
+                        except (AttributeError, psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess, OSError):
+                            create_time = None
                     result[pid] = CodingAgentProcess(
                         pid=pid,
                         name=name,
