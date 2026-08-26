@@ -19,7 +19,7 @@ __all__ = [
     "configure_logging",
     "RuleAction",
     "RuleEngine",
+    "Migration",
+    "MigrationError",
+    "MigrationRunner",
 ]
-from .migrations import Migration, MigrationError, MigrationRunner
-
-__all__ = ["Migration", "MigrationError", "MigrationRunner"]

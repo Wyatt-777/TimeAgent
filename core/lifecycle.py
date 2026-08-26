@@ -39,12 +39,14 @@ class Runtime:
         self.rule_engine = RuleEngine(settings.process_monitor.important_processes)
         self.dispatcher = Dispatcher(self.event_bus, self.event_store, self.rule_engine)
         if sensors is None:
+            from sensors.coding_agent_monitor import CodingAgentMonitor
             from sensors.file_monitor import FileMonitor
             from sensors.process_monitor import ProcessMonitor
             from sensors.window_monitor import WindowMonitor
 
             sensors = (
                 ProcessMonitor(self.event_bus, settings.process_monitor),
+                CodingAgentMonitor(self.event_bus, settings.coding_agent_monitor),
                 FileMonitor(self.event_bus, settings.file_monitor),
                 WindowMonitor(self.event_bus, settings.window_monitor),
             )

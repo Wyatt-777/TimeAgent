@@ -12,6 +12,7 @@ def test_load_default_settings() -> None:
     assert settings.process_monitor.interval_seconds == 2.0
     assert settings.file_monitor.paths == ("D:/trackTime/local-pc-agent",)
     assert settings.agent_brain.enabled is False
+    assert settings.coding_agent_monitor.process_names == ("codex.exe", "claude.exe")
 
 
 def test_environment_can_override_log_level() -> None:

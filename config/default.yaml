@@ -11,6 +11,13 @@ process_monitor:
     - codex.exe
     - claude.exe
 
+coding_agent_monitor:
+  enabled: true
+  interval_seconds: 2
+  process_names:
+    - codex.exe
+    - claude.exe
+
 file_monitor:
   enabled: true
   recursive: true

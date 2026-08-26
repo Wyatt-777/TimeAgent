@@ -1,0 +1,91 @@
+import psutil
+
+from config.settings import CodingAgentMonitorSettings
+from core.event import EventType, Priority
+from core.event_bus import EventBus
+from sensors.coding_agent_monitor import CodingAgentMonitor
+
+
+class FakeProcess:
+    def __init__(self, info):
+        self.info = info
+
+
+class DeniedProcess:
+    @property
+    def info(self):
+        raise psutil.AccessDenied(pid=99)
+
+
+def test_monitor_detects_session_start_and_finish(monkeypatch) -> None:
+    snapshots = [
+        [FakeProcess({"pid": 7, "name": "codex.exe", "create_time": 1.0})],
+        [
+            FakeProcess({"pid": 7, "name": "codex.exe", "create_time": 1.0}),
+            FakeProcess({"pid": 8, "name": "claude.exe", "create_time": 2.0}),
+        ],
+        [FakeProcess({"pid": 7, "name": "codex.exe", "create_time": 1.0})],
+    ]
+    monkeypatch.setattr("sensors.coding_agent_monitor.psutil.process_iter", lambda _attrs: snapshots.pop(0))
+    bus = EventBus()
+    monitor = CodingAgentMonitor(
+        event_bus=bus,
+        settings=CodingAgentMonitorSettings(process_names=("codex.exe", "claude.exe")),
+    )
+
+    assert monitor.scan_once() == []
+    started = monitor.scan_once()
+    finished = monitor.scan_once()
+
+    assert [event.type for event in started] == [EventType.CODING_SESSION_STARTED]
+    assert started[0].priority == Priority.IMPORTANT
+    assert started[0].data["agent_name"] == "claude.exe"
+    assert [event.type for event in finished] == [EventType.CODING_SESSION_FINISHED]
+    assert finished[0].data["session_id"] == started[0].data["session_id"]
+    assert finished[0].data["duration_seconds"] >= 0
+    assert bus.consume(timeout=0.1) is started[0]
+
+
+def test_monitor_ignores_unconfigured_processes_and_access_denied(monkeypatch) -> None:
+    snapshots = [
+        [DeniedProcess(), FakeProcess({"pid": 1, "name": "Code.exe", "create_time": 1.0})],
+        [
+            DeniedProcess(),
+            FakeProcess({"pid": 1, "name": "Code.exe", "create_time": 1.0}),
+            FakeProcess({"pid": 2, "name": "codex.exe", "create_time": 2.0}),
+        ],
+    ]
+    monkeypatch.setattr("sensors.coding_agent_monitor.psutil.process_iter", lambda _attrs: snapshots.pop(0))
+    monitor = CodingAgentMonitor(settings=CodingAgentMonitorSettings(process_names=("codex.exe",)))
+
+    monitor.scan_once()
+    events = monitor.scan_once()
+
+    assert len(events) == 1
+    assert events[0].data["agent_name"] == "codex.exe"
+
+
+def test_monitor_detects_pid_reuse_as_new_session(monkeypatch) -> None:
+    snapshots = [
+        [FakeProcess({"pid": 3, "name": "codex.exe", "create_time": 1.0})],
+        [FakeProcess({"pid": 3, "name": "codex.exe", "create_time": 2.0})],
+    ]
+    monkeypatch.setattr("sensors.coding_agent_monitor.psutil.process_iter", lambda _attrs: snapshots.pop(0))
+    monitor = CodingAgentMonitor()
+
+    monitor.scan_once()
+    events = monitor.scan_once()
+
+    assert [event.type for event in events] == [
+        EventType.CODING_SESSION_FINISHED,
+        EventType.CODING_SESSION_STARTED,
+    ]
+    assert events[0].data["session_id"] != events[1].data["session_id"]
+
+
+def test_disabled_monitor_does_not_start_thread() -> None:
+    monitor = CodingAgentMonitor(settings=CodingAgentMonitorSettings(enabled=False))
+
+    monitor.start()
+
+    assert monitor._thread is None

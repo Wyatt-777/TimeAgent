@@ -33,6 +33,13 @@ class ProcessMonitorSettings:
 
 
 @dataclass(frozen=True)
+class CodingAgentMonitorSettings:
+    enabled: bool = True
+    interval_seconds: float = 2.0
+    process_names: tuple[str, ...] = ("codex.exe", "claude.exe")
+
+
+@dataclass(frozen=True)
 class FileMonitorSettings:
     enabled: bool = True
     recursive: bool = True
@@ -81,6 +88,7 @@ class AgentBrainSettings:
 class Settings:
     agent: AgentSettings = field(default_factory=AgentSettings)
     process_monitor: ProcessMonitorSettings = field(default_factory=ProcessMonitorSettings)
+    coding_agent_monitor: CodingAgentMonitorSettings = field(default_factory=CodingAgentMonitorSettings)
     file_monitor: FileMonitorSettings = field(default_factory=FileMonitorSettings)
     window_monitor: WindowMonitorSettings = field(default_factory=WindowMonitorSettings)
     system_monitor: SystemMonitorSettings = field(default_factory=SystemMonitorSettings)
@@ -93,6 +101,7 @@ class Settings:
         """Build and validate settings from a YAML-compatible mapping."""
         agent = _section(raw, "agent")
         process = _section(raw, "process_monitor")
+        coding_agents = _section(raw, "coding_agent_monitor")
         files = _section(raw, "file_monitor")
         window = _section(raw, "window_monitor")
         system = _section(raw, "system_monitor")
@@ -109,6 +118,11 @@ class Settings:
                 enabled=_bool(process, "enabled", True),
                 interval_seconds=_number(process, "interval_seconds", 2.0),
                 important_processes=_strings(process, "important_processes", ProcessMonitorSettings.important_processes),
+            ),
+            coding_agent_monitor=CodingAgentMonitorSettings(
+                enabled=_bool(coding_agents, "enabled", True),
+                interval_seconds=_number(coding_agents, "interval_seconds", 2.0),
+                process_names=_strings(coding_agents, "process_names", CodingAgentMonitorSettings.process_names),
             ),
             file_monitor=FileMonitorSettings(
                 enabled=_bool(files, "enabled", True),
@@ -144,6 +158,7 @@ class Settings:
             raise ConfigError(f"Unsupported log level: {self.agent.log_level}")
         intervals = {
             "process_monitor.interval_seconds": self.process_monitor.interval_seconds,
+            "coding_agent_monitor.interval_seconds": self.coding_agent_monitor.interval_seconds,
             "window_monitor.interval_seconds": self.window_monitor.interval_seconds,
             "system_monitor.interval_seconds": self.system_monitor.interval_seconds,
         }

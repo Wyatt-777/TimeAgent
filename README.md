@@ -26,7 +26,7 @@ python main.py
 python main.py --once
 ```
 
-当前已完成 v0.1 基础运行时，以及 v0.2 Task 101-106：可替换的 LLM Provider 接口、离线 MockProvider、上下文构建器、结构化决策安全解析、默认拒绝的审批策略、受策略保护的动作执行器和 Agent 调用审计日志。Agent Brain 默认仍关闭；当前阶段先执行 5 分钟短时验收，项目整体完成后再执行正式长时稳定性验收。
+当前已完成 v0.1 基础运行时、v0.2 Task 101-106，以及 v0.3 Task 201-202：可替换的 LLM Provider 接口、离线 MockProvider、上下文构建器、结构化决策安全解析、默认拒绝的审批策略、受策略保护的动作执行器、Agent 调用审计日志，以及 Coding Agent Session 识别。Agent Brain 默认仍关闭；当前阶段先执行 5 分钟短时验收，项目整体完成后再执行正式长时稳定性验收。
 
 运行当前阶段的 5 分钟短测：
 
