@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import ctypes
 from dataclasses import dataclass
 from typing import Callable
 
@@ -61,35 +62,51 @@ class WindowsNotificationAdapter:
     def _send_win32(self, request: NotificationRequest) -> None:
         if sys.platform != "win32":
             raise NotificationError("Windows notifications are only available on win32")
-        try:
-            import win32con
-            import win32gui
-        except ImportError as exc:
-            raise NotificationError("pywin32 is required for Windows notifications") from exc
+        from ctypes import wintypes
 
-        hwnd = win32gui.GetDesktopWindow()
-        icon = win32gui.LoadIcon(None, win32con.IDI_APPLICATION)
-        callback = win32con.WM_USER + 20
-        base_flags = win32gui.NIF_ICON | win32gui.NIF_MESSAGE | win32gui.NIF_TIP
-        notify_id = (hwnd, 0, base_flags, callback, icon, self.app_name)
-        win32gui.Shell_NotifyIcon(win32gui.NIM_ADD, notify_id)
+        class NotifyIconData(ctypes.Structure):
+            _fields_ = [
+                ("cbSize", wintypes.DWORD),
+                ("hWnd", wintypes.HWND),
+                ("uID", wintypes.UINT),
+                ("uFlags", wintypes.UINT),
+                ("uCallbackMessage", wintypes.UINT),
+                ("hIcon", wintypes.HICON),
+                ("szTip", wintypes.WCHAR * 128),
+                ("dwState", wintypes.DWORD),
+                ("dwStateMask", wintypes.DWORD),
+                ("szInfo", wintypes.WCHAR * 256),
+                ("uTimeout", wintypes.UINT),
+                ("szInfoTitle", wintypes.WCHAR * 64),
+                ("dwInfoFlags", wintypes.DWORD),
+                ("guidItem", ctypes.c_byte * 16),
+                ("hBalloonIcon", wintypes.HICON),
+            ]
+
+        user32 = ctypes.windll.user32
+        shell32 = ctypes.windll.shell32
+        user32.GetDesktopWindow.restype = wintypes.HWND
+        user32.LoadIconW.restype = wintypes.HICON
+        shell32.Shell_NotifyIconW.argtypes = [wintypes.DWORD, ctypes.POINTER(NotifyIconData)]
+        shell32.Shell_NotifyIconW.restype = wintypes.BOOL
+
+        data = NotifyIconData()
+        data.cbSize = ctypes.sizeof(NotifyIconData)
+        data.hWnd = user32.GetDesktopWindow()
+        data.uID = 1
+        data.uCallbackMessage = 0x8000 + 20
+        data.hIcon = user32.LoadIconW(None, ctypes.c_void_p(32512))
+        data.szTip = self.app_name[:127]
+        data.uFlags = 0x00000001 | 0x00000002 | 0x00000004
+        if not shell32.Shell_NotifyIconW(0, ctypes.byref(data)):
+            raise NotificationError("Shell_NotifyIconW(NIM_ADD) failed")
         try:
-            info_flags = getattr(win32gui, "NIIF_INFO", 1)
-            balloon_flags = base_flags | win32gui.NIF_INFO
-            balloon = (
-                hwnd,
-                0,
-                balloon_flags,
-                callback,
-                icon,
-                self.app_name,
-                0,
-                0,
-                request.message,
-                5000,
-                request.title,
-                info_flags,
-            )
-            win32gui.Shell_NotifyIcon(win32gui.NIM_MODIFY, balloon)
+            data.uFlags |= 0x00000010
+            data.szInfo = request.message[:255]
+            data.uTimeout = 5000
+            data.szInfoTitle = request.title[:63]
+            data.dwInfoFlags = 0x00000001
+            if not shell32.Shell_NotifyIconW(1, ctypes.byref(data)):
+                raise NotificationError("Shell_NotifyIconW(NIM_MODIFY) failed")
         finally:
-            win32gui.Shell_NotifyIcon(win32gui.NIM_DELETE, notify_id)
+            shell32.Shell_NotifyIconW(2, ctypes.byref(data))
