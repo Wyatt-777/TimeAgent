@@ -51,3 +51,12 @@ def test_alert_model_round_trips_unicode() -> None:
     restored = Alert.from_mapping(alert.to_dict())
 
     assert restored == alert
+
+
+def test_alert_store_merges_metadata(tmp_path) -> None:
+    with AlertStore(tmp_path / "alerts.db") as store:
+        alert = make_alert()
+        store.insert(alert)
+        updated = store.update_metadata(alert.id, {"investigation_task_id": "task_1"})
+
+    assert updated.metadata["investigation_task_id"] == "task_1"

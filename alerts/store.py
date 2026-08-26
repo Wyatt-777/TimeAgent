@@ -131,6 +131,28 @@ class AlertStore:
         assert alert is not None
         return alert
 
+    def update_metadata(self, alert_id: str, values: dict[str, Any]) -> Alert:
+        """Merge bounded metadata into an existing alert."""
+        if not isinstance(values, dict):
+            raise TypeError("values must be a dictionary")
+        with self._lock, self._connection:
+            row = self._connection.execute(
+                "SELECT metadata FROM alerts WHERE id = ?", (alert_id,)
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"Unknown alert: {alert_id}")
+            metadata = json.loads(row["metadata"])
+            if not isinstance(metadata, dict):
+                raise ValueError("stored alert metadata must be an object")
+            metadata.update(values)
+            self._connection.execute(
+                "UPDATE alerts SET metadata = ? WHERE id = ?",
+                (json.dumps(metadata, ensure_ascii=False, sort_keys=True), alert_id),
+            )
+        alert = self.get(alert_id)
+        assert alert is not None
+        return alert
+
     def close(self) -> None:
         with self._lock:
             self._connection.close()

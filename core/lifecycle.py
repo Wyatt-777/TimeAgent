@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import threading
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Protocol, Sequence
 
 from config.settings import Settings
@@ -36,6 +37,10 @@ class Runtime:
         settings.validate()
         from alerts import AlertInbox, AlertService, AlertStore
         from notifications import NotificationManager
+        from agent.audit_log import AuditLog
+        from agent.codex_launcher import CodexLauncher
+        from agent.investigation_coordinator import InvestigationCoordinator
+        from agent.investigation_service import InvestigationService
 
         self.settings = settings
         self.logger = logger or logging.getLogger("local_pc_agent")
@@ -46,6 +51,14 @@ class Runtime:
         self.alert_service = AlertService(self.alert_store)
         self.alert_inbox = AlertInbox(self.alert_store)
         self.notification_manager = NotificationManager(self.alert_service)
+        self.investigation_coordinator = InvestigationCoordinator(
+            event_store=self.event_store,
+            alert_store=self.alert_store,
+            service=InvestigationService(
+                launcher=CodexLauncher(),
+                audit_log=AuditLog(Path(settings.storage.log_path) / "investigations.jsonl"),
+            ),
+        )
         self.rule_engine = RuleEngine(settings.process_monitor.important_processes)
         self.dispatcher = Dispatcher(
             self.event_bus,
@@ -121,9 +134,24 @@ class Runtime:
     def _handle_alert(self, event: Event) -> None:
         result = self.alert_service.create_from_event(event)
         if result.created and result.alert is not None:
+            self.investigation_coordinator.enqueue_alert(result.alert, event)
             delivery = self.notification_manager.deliver(result.alert)
             if not delivery.sent:
                 self.logger.warning("Alert %s was not notified: %s", result.alert.id, delivery.reason)
+
+    def run_investigation(
+        self,
+        alert_id: str,
+        *,
+        approved: bool = False,
+        context: object | None = None,
+    ) -> object:
+        """Run one queued investigation only after an explicit approval flag."""
+        return self.investigation_coordinator.run_for_alert(
+            alert_id,
+            approved=approved,
+            context=context,  # type: ignore[arg-type]
+        )
 
     def _drain_events(self) -> None:
         while self.event_bus.qsize() > 0:

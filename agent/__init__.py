@@ -44,6 +44,7 @@ from .investigation_service import (
     InvestigationRunStatus,
     InvestigationService,
 )
+from .investigation_coordinator import InvestigationCoordinator, PendingInvestigation
 
 __all__ = [
     "AgentContext",
@@ -87,4 +88,6 @@ __all__ = [
     "InvestigationRun",
     "InvestigationRunStatus",
     "InvestigationService",
+    "InvestigationCoordinator",
+    "PendingInvestigation",
 ]

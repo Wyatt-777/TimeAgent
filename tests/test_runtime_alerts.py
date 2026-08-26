@@ -22,4 +22,5 @@ def test_runtime_routes_alert_events_to_alert_store(tmp_path) -> None:
     pending = runtime.alert_inbox.pending()
     assert len(pending) == 1
     assert pending[0].status.value == "NOTIFIED"
+    assert runtime.investigation_coordinator.pending(pending[0].id) is not None
     runtime.shutdown()
