@@ -1,0 +1,45 @@
+agent:
+  name: LocalPCAgent
+  log_level: INFO
+
+process_monitor:
+  enabled: true
+  interval_seconds: 2
+  important_processes:
+    - Code.exe
+    - python.exe
+    - codex.exe
+    - claude.exe
+
+file_monitor:
+  enabled: true
+  recursive: true
+  paths:
+    - D:/trackTime/local-pc-agent
+  ignore:
+    - .git
+    - node_modules
+    - .venv
+    - __pycache__
+    - target
+    - build
+    - data
+
+window_monitor:
+  enabled: true
+  interval_seconds: 1
+
+system_monitor:
+  enabled: true
+  interval_seconds: 10
+
+storage:
+  sqlite_path: data/agent.db
+  log_path: data/logs
+
+privacy:
+  screen_capture_enabled: false
+  retain_screenshots_days: 1
+
+agent_brain:
+  enabled: false

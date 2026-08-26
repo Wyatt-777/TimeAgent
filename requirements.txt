@@ -1,0 +1,5 @@
+psutil>=5.9,<8
+watchdog>=4,<7
+pywin32>=306,<400
+PyYAML>=6,<7
+pytest>=8,<9
