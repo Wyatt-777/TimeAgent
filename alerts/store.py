@@ -65,6 +65,21 @@ class AlertStore:
             ).fetchone()
         return self._row_to_alert(row) if row is not None else None
 
+    def find_recent(self, dedup_key: str, *, since: datetime) -> Alert | None:
+        if since.tzinfo is None:
+            raise ValueError("since must be timezone-aware")
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT * FROM alerts
+                WHERE dedup_key = ? AND created_at >= ?
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (dedup_key, since.isoformat()),
+            ).fetchone()
+        return self._row_to_alert(row) if row is not None else None
+
     def list(
         self,
         *,
