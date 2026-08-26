@@ -41,6 +41,40 @@ class GitStatus:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class GitDiffFile:
+    path: str
+    additions: int | None
+    deletions: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class GitDiffStat:
+    files: tuple[GitDiffFile, ...] = ()
+
+    @property
+    def additions(self) -> int:
+        return sum(item.additions or 0 for item in self.files)
+
+    @property
+    def deletions(self) -> int:
+        return sum(item.deletions or 0 for item in self.files)
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "files": [
+                {
+                    "path": item.path,
+                    "additions": item.additions,
+                    "deletions": item.deletions,
+                }
+                for item in self.files
+            ],
+            "additions": self.additions,
+            "deletions": self.deletions,
+        }
+
+
 class GitInspector:
     """Run a fixed, read-only Git status query in one workspace."""
 
@@ -55,6 +89,10 @@ class GitInspector:
     def status(self) -> GitStatus:
         result = self._run(("status", "--porcelain=v1", "--branch"))
         return parse_status(result.stdout)
+
+    def diff_stat(self) -> GitDiffStat:
+        result = self._run(("diff", "--numstat", "--no-ext-diff", "--"))
+        return parse_diff_numstat(result.stdout)
 
     def _run(self, arguments: tuple[str, ...]) -> subprocess.CompletedProcess[str]:
         try:
@@ -113,6 +151,18 @@ def parse_status(output: str) -> GitStatus:
     )
 
 
+def parse_diff_numstat(output: str) -> GitDiffStat:
+    files: list[GitDiffFile] = []
+    for line in output.splitlines():
+        parts = line.split("\t", 2)
+        if len(parts) != 3:
+            continue
+        additions = _diff_count(parts[0])
+        deletions = _diff_count(parts[1])
+        files.append(GitDiffFile(path=parts[2], additions=additions, deletions=deletions))
+    return GitDiffStat(files=tuple(files))
+
+
 def _parse_branch(value: str) -> tuple[str | None, int, int]:
     if value == "No commits yet on HEAD":
         return "HEAD", 0, 0
@@ -120,3 +170,10 @@ def _parse_branch(value: str) -> tuple[str | None, int, int]:
     ahead_match = re.search(r"ahead (\d+)", value)
     behind_match = re.search(r"behind (\d+)", value)
     return branch, int(ahead_match.group(1)) if ahead_match else 0, int(behind_match.group(1)) if behind_match else 0
+
+
+def _diff_count(value: str) -> int | None:
+    try:
+        return int(value)
+    except ValueError:
+        return None

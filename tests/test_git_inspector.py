@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from workspace.git import GitCommandError, GitInspector, parse_status
+from workspace.git import GitCommandError, GitInspector, parse_diff_numstat, parse_status
 from workspace.resolver import Workspace
 
 
@@ -39,6 +39,31 @@ def test_inspector_runs_only_fixed_read_only_query(monkeypatch, tmp_path: Path) 
     assert inspector.status().branch == "main"
     assert calls[0][0] == ("git", "status", "--porcelain=v1", "--branch")
     assert calls[0][1]["cwd"] == tmp_path
+
+
+def test_parse_diff_numstat_and_binary_files() -> None:
+    diff = parse_diff_numstat("3\t1\tREADME.md\n-\t-\timage.png\n")
+
+    assert diff.files[0].path == "README.md"
+    assert diff.additions == 3
+    assert diff.deletions == 1
+    assert diff.files[1].additions is None
+    assert diff.files[1].deletions is None
+
+
+def test_inspector_diff_stat_uses_fixed_read_only_query(monkeypatch, tmp_path: Path) -> None:
+    calls = []
+
+    def fake_run(arguments, **kwargs):
+        calls.append((arguments, kwargs))
+        return subprocess.CompletedProcess(arguments, 0, "1\t2\tmain.py\n", "")
+
+    monkeypatch.setattr("workspace.git.subprocess.run", fake_run)
+    diff = GitInspector(Workspace(tmp_path, "project")).diff_stat()
+
+    assert diff.additions == 1
+    assert diff.deletions == 2
+    assert calls[0][0] == ("git", "diff", "--numstat", "--no-ext-diff", "--")
 
 
 def test_inspector_surfaces_git_failures(monkeypatch, tmp_path: Path) -> None:
