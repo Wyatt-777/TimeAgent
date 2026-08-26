@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "local_pc_agent_observer": {
+      "command": "D:/trackTime/local-pc-agent/.venv/Scripts/python.exe",
+      "args": [
+        "-m",
+        "integrations.mcp.observer_mcp",
+        "--database",
+        "D:/trackTime/local-pc-agent/data/agent.db",
+        "--workspace",
+        "D:/trackTime/local-pc-agent"
+      ],
+      "cwd": "D:/trackTime/local-pc-agent"
+    }
+  }
+}

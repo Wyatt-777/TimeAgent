@@ -1,0 +1,26 @@
+{
+  "name": "personal-observer",
+  "version": "0.1.0",
+  "description": "Read-only Codex workflows for the local PC Agent Observer.",
+  "author": {
+    "name": "Wyatt-777",
+    "url": "https://github.com/Wyatt-777"
+  },
+  "repository": "https://github.com/Wyatt-777/TimeAgent",
+  "keywords": ["local observer", "activity", "coding session", "read-only"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Personal Observer",
+    "shortDescription": "Inspect local activity safely in Codex.",
+    "longDescription": "Personal Observer provides read-only status, event, alert, session, and Git context from Local PC Agent.",
+    "developerName": "Wyatt-777",
+    "category": "Productivity",
+    "capabilities": ["Read"],
+    "defaultPrompt": [
+      "查询当前 Local PC Agent 状态",
+      "查看最近事件和待处理告警",
+      "查看当前活动 Coding Agent Session"
+    ]
+  },
+  "mcpServers": "./.mcp.json"
+}
