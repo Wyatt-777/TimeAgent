@@ -101,6 +101,28 @@ def _create_events_schema(connection: sqlite3.Connection) -> None:
     connection.execute("CREATE INDEX IF NOT EXISTS idx_events_priority ON events(priority)")
 
 
+def _create_alerts_schema(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS alerts (
+            id TEXT PRIMARY KEY,
+            event_id TEXT,
+            created_at TEXT NOT NULL,
+            priority INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            summary TEXT NOT NULL,
+            status TEXT NOT NULL,
+            dedup_key TEXT,
+            metadata TEXT NOT NULL
+        )
+        """
+    )
+    connection.execute("CREATE INDEX IF NOT EXISTS idx_alerts_created_at ON alerts(created_at)")
+    connection.execute("CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status)")
+    connection.execute("CREATE INDEX IF NOT EXISTS idx_alerts_dedup_key ON alerts(dedup_key)")
+
+
 DEFAULT_MIGRATIONS = (
     Migration(1, "create_events_schema", _create_events_schema),
+    Migration(2, "create_alerts_schema", _create_alerts_schema),
 )
