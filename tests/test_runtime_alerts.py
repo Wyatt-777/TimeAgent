@@ -4,6 +4,8 @@ from agent.investigation_service import InvestigationApproval, InvestigationAppr
 from core.event import Event, EventType, Priority
 from core.lifecycle import Runtime
 from agent.codex_launcher import CodexLauncher
+from sensors.file_monitor import FileMonitor
+from watchdog.events import FileModifiedEvent
 
 
 def test_runtime_routes_alert_events_to_alert_store(tmp_path) -> None:
@@ -68,4 +70,25 @@ def test_runtime_sends_investigation_follow_up_notification(tmp_path) -> None:
     assert run.status.value == "completed"
     assert received[-1].title == "Codex investigation result"
     assert "bad fixture" in received[-1].message
+    runtime.shutdown()
+
+
+def test_runtime_does_not_notify_for_1000_file_modifications(tmp_path) -> None:
+    runtime = Runtime(
+        Settings(storage=StorageSettings(sqlite_path=str(tmp_path / "agent.db"))),
+        sensors=(),
+    )
+    received = []
+    runtime.notification_manager.adapter._backend = received.append
+    monitor = FileMonitor(event_bus=runtime.event_bus, debounce_seconds=0.05)
+    path = str(tmp_path / "main.py")
+
+    for _ in range(1000):
+        monitor.handle_event(FileModifiedEvent(path), EventType.FILE_MODIFIED)
+    events = monitor.flush_pending(force=True)
+
+    assert len(events) == 1
+    assert events[0].data["count"] == 1000
+    runtime.dispatcher.dispatch_once(timeout=0)
+    assert received == []
     runtime.shutdown()

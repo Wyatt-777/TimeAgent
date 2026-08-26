@@ -16,12 +16,29 @@ def test_file_monitor_merges_repeated_modifications() -> None:
     monitor.handle_event(FileModifiedEvent(path), EventType.FILE_MODIFIED)
     assert monitor.flush_pending() == []
 
-    time.sleep(0.06)
-    events = monitor.flush_pending()
+    deadline = time.monotonic() + 1
+    events = []
+    while not events and time.monotonic() < deadline:
+        events = monitor.flush_pending()
+        if not events:
+            time.sleep(0.01)
 
     assert len(events) == 1
     assert events[0].type is EventType.FILE_MODIFIED
     assert events[0].data["count"] == 2
+
+
+def test_file_monitor_aggregates_1000_modifications_into_one_event() -> None:
+    monitor = FileMonitor(debounce_seconds=0.05)
+    path = "D:/Projects/demo/main.py"
+
+    for _ in range(1000):
+        monitor.handle_event(FileModifiedEvent(path), EventType.FILE_MODIFIED)
+
+    events = monitor.flush_pending(force=True)
+
+    assert len(events) == 1
+    assert events[0].data["count"] == 1000
 
 
 def test_file_monitor_applies_ignore_rules_and_publishes() -> None:

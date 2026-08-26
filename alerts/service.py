@@ -57,7 +57,17 @@ class AlertService:
             since=now - timedelta(seconds=self.policy.dedup_window_seconds),
         )
         if existing is not None:
-            return AlertCreationResult(existing, False, "duplicate_within_window")
+            occurrence_count = existing.metadata.get("occurrence_count", 1)
+            if not isinstance(occurrence_count, int) or occurrence_count < 1:
+                occurrence_count = 1
+            updated = self.store.update_metadata(
+                existing.id,
+                {
+                    "occurrence_count": occurrence_count + 1,
+                    "last_occurrence_at": now.isoformat(),
+                },
+            )
+            return AlertCreationResult(updated, False, "duplicate_within_window")
 
         alert = Alert(
             event_id=event.id,
@@ -66,7 +76,11 @@ class AlertService:
             title=_title(event),
             summary=_summary(event),
             dedup_key=dedup_key,
-            metadata={"source": event.source, "event_type": event.type.value},
+            metadata={
+                "source": event.source,
+                "event_type": event.type.value,
+                "occurrence_count": 1,
+            },
         )
         self.store.insert(alert)
         return AlertCreationResult(alert, True, "created")

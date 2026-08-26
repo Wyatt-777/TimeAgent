@@ -26,7 +26,27 @@ def test_alert_service_creates_and_deduplicates_alerts(tmp_path) -> None:
         assert first.created is True
         assert duplicate.created is False
         assert duplicate.reason == "duplicate_within_window"
-        assert store.list() == [first.alert]
+        assert duplicate.alert is not None
+        assert duplicate.alert.metadata["occurrence_count"] == 2
+        assert store.list()[0].metadata["occurrence_count"] == 2
+
+
+def test_alert_service_keeps_one_alert_and_counts_repeated_errors(tmp_path) -> None:
+    now = datetime(2026, 8, 26, 10, 0, tzinfo=timezone.utc)
+    with AlertStore(tmp_path / "alerts.db") as store:
+        service = AlertService(store)
+        results = [
+            service.create_from_event(
+                repeated_event(f"evt_{index}"),
+                now=now + timedelta(seconds=index),
+            )
+            for index in range(20)
+        ]
+
+        assert sum(result.created for result in results) == 1
+        alerts = store.list()
+        assert len(alerts) == 1
+        assert alerts[0].metadata["occurrence_count"] == 20
 
 
 def test_alert_service_allows_new_alert_after_dedup_window(tmp_path) -> None:
