@@ -111,3 +111,15 @@ def test_monitor_attaches_only_configured_project_root(monkeypatch, tmp_path) ->
     monitor.scan_once()
 
     assert monitor.active_sessions()[0].project_path == str(project.resolve())
+
+
+def test_monitor_does_not_request_cwd_for_every_process(monkeypatch) -> None:
+    requested = []
+    monkeypatch.setattr(
+        "sensors.coding_agent_monitor.psutil.process_iter",
+        lambda attrs: requested.append(tuple(attrs)) or [],
+    )
+
+    CodingAgentMonitor().scan_once()
+
+    assert requested == [("pid", "name", "create_time")]

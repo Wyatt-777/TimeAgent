@@ -119,7 +119,7 @@ class CodingAgentMonitor:
         names = {name.casefold() for name in self.settings.process_names}
         result: dict[int, CodingAgentProcess] = {}
         try:
-            processes: Iterable[psutil.Process] = psutil.process_iter(["pid", "name", "create_time", "cwd"])
+            processes: Iterable[psutil.Process] = psutil.process_iter(["pid", "name", "create_time"])
             for process in processes:
                 try:
                     info = process.info
