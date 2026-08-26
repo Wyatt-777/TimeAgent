@@ -20,3 +20,6 @@ __all__ = [
     "RuleAction",
     "RuleEngine",
 ]
+from .migrations import Migration, MigrationError, MigrationRunner
+
+__all__ = ["Migration", "MigrationError", "MigrationRunner"]

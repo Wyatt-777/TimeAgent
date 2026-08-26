@@ -9,6 +9,7 @@ from threading import Lock
 from typing import Any
 
 from .event import Event, EventType, Priority
+from .migrations import DEFAULT_MIGRATIONS, MigrationRunner
 
 
 class EventStore:
@@ -29,27 +30,14 @@ class EventStore:
         with self._lock, self._connection:
             self._connection.execute("PRAGMA foreign_keys = ON")
             self._connection.execute("PRAGMA journal_mode = WAL")
-            self._connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS events (
-                    id TEXT PRIMARY KEY,
-                    type TEXT NOT NULL,
-                    source TEXT NOT NULL,
-                    timestamp TEXT NOT NULL,
-                    priority INTEGER NOT NULL,
-                    data TEXT NOT NULL,
-                    metadata TEXT NOT NULL
-                )
-                """
-            )
-            self._connection.execute(
-                "CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp)"
-            )
-            self._connection.execute("CREATE INDEX IF NOT EXISTS idx_events_type ON events(type)")
-            self._connection.execute("CREATE INDEX IF NOT EXISTS idx_events_source ON events(source)")
-            self._connection.execute(
-                "CREATE INDEX IF NOT EXISTS idx_events_priority ON events(priority)"
-            )
+            self._migrations = MigrationRunner(DEFAULT_MIGRATIONS)
+            self._migrations.apply(self._connection)
+
+    @property
+    def schema_version(self) -> int:
+        """Return the applied schema version for diagnostics and tests."""
+        with self._lock:
+            return self._migrations.current_version(self._connection)
 
     def insert(self, event: Event) -> None:
         """Insert one event, preserving its canonical JSON representation."""

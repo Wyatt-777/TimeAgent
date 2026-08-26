@@ -40,6 +40,7 @@ def test_store_initializes_inserts_and_queries_unicode_events(tmp_path) -> None:
 
 def test_store_creates_expected_indexes(tmp_path) -> None:
     with EventStore(tmp_path / "agent.db") as store:
+        assert store.schema_version == 1
         rows = store._connection.execute(
             "SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_events_%'"
         ).fetchall()
@@ -50,6 +51,42 @@ def test_store_creates_expected_indexes(tmp_path) -> None:
         "idx_events_source",
         "idx_events_priority",
     }
+
+
+def test_existing_database_is_migrated_without_losing_events(tmp_path) -> None:
+    database = tmp_path / "legacy.db"
+    first = Event(type=EventType.AGENT_STARTED, source="legacy")
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            """
+            CREATE TABLE events (
+                id TEXT PRIMARY KEY,
+                type TEXT NOT NULL,
+                source TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                priority INTEGER NOT NULL,
+                data TEXT NOT NULL,
+                metadata TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            "INSERT INTO events VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                first.id,
+                first.type.value,
+                first.source,
+                first.timestamp.isoformat(),
+                int(first.priority),
+                "{}",
+                "{}",
+            ),
+        )
+
+    with EventStore(database) as store:
+        assert store.schema_version == 1
+        assert store.count() == 1
+        assert store.query()[0].id == first.id
 
 
 def test_store_rejects_invalid_queries_and_duplicate_ids(tmp_path) -> None:
