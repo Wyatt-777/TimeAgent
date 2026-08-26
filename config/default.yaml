@@ -50,3 +50,26 @@ privacy:
 
 agent_brain:
   enabled: false
+
+codex:
+  enabled: true
+  investigation:
+    enabled: true
+    mode: read_only
+    timeout_seconds: 120
+    max_invocations: 3
+    window_seconds: 3600
+    auto_investigate: false
+
+notifications:
+  enabled: true
+  minimum_priority: IMPORTANT
+  cooldown_seconds: 300
+  dedup_window_seconds: 600
+
+proactive_agent:
+  enabled: true
+  notify_on:
+    - CODING_SESSION_FINISHED
+    - TEST_FAILED_REPEATEDLY
+    - SYSTEM_DISK_LOW

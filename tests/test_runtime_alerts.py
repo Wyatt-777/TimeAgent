@@ -1,4 +1,5 @@
-from config.settings import Settings, StorageSettings
+from config.settings import NotificationSettings, Settings, StorageSettings
+from config.settings import CodexInvestigationSettings, CodexSettings, ProactiveAgentSettings
 from agent.investigation import InvestigationContextPackage
 from agent.investigation_service import InvestigationApproval, InvestigationApprovalMode, InvestigationService
 from core.event import Event, EventType, Priority
@@ -143,4 +144,30 @@ def test_runtime_reports_and_notifies_when_coding_session_finishes(tmp_path) -> 
     assert len(received) == 1
     assert received[0].title == "Coding Agent session finished"
     assert "12 passed" in received[0].message
+    runtime.shutdown()
+
+
+def test_runtime_honors_disabled_notification_and_investigation_settings(tmp_path) -> None:
+    runtime = Runtime(
+        Settings(
+            storage=StorageSettings(sqlite_path=str(tmp_path / "agent.db")),
+            notifications=NotificationSettings(enabled=False),
+            codex=CodexSettings(investigation=CodexInvestigationSettings(enabled=False)),
+        ),
+        sensors=(),
+    )
+    received = []
+    runtime.notification_manager.adapter._backend = received.append
+    runtime._handle_alert(
+        Event(
+            type=EventType.TEST_FAILED_REPEATEDLY,
+            source="test_failure_tracker",
+            priority=Priority.IMPORTANT,
+            data={"project_path": str(tmp_path), "test_group": "unit", "consecutive_failures": 3},
+        )
+    )
+
+    alert = runtime.alert_inbox.pending()[0]
+    assert received == []
+    assert runtime.investigation_coordinator.pending(alert.id) is None
     runtime.shutdown()

@@ -85,6 +85,40 @@ class AgentBrainSettings:
 
 
 @dataclass(frozen=True)
+class CodexInvestigationSettings:
+    enabled: bool = True
+    mode: str = "read_only"
+    timeout_seconds: float = 120.0
+    max_invocations: int = 3
+    window_seconds: float = 3600.0
+    auto_investigate: bool = False
+
+
+@dataclass(frozen=True)
+class CodexSettings:
+    enabled: bool = True
+    investigation: CodexInvestigationSettings = field(default_factory=CodexInvestigationSettings)
+
+
+@dataclass(frozen=True)
+class NotificationSettings:
+    enabled: bool = True
+    minimum_priority: int = 30
+    cooldown_seconds: float = 300.0
+    dedup_window_seconds: float = 600.0
+
+
+@dataclass(frozen=True)
+class ProactiveAgentSettings:
+    enabled: bool = True
+    notify_on: tuple[str, ...] = (
+        "CODING_SESSION_FINISHED",
+        "TEST_FAILED_REPEATEDLY",
+        "SYSTEM_DISK_LOW",
+    )
+
+
+@dataclass(frozen=True)
 class Settings:
     agent: AgentSettings = field(default_factory=AgentSettings)
     process_monitor: ProcessMonitorSettings = field(default_factory=ProcessMonitorSettings)
@@ -95,6 +129,9 @@ class Settings:
     storage: StorageSettings = field(default_factory=StorageSettings)
     privacy: PrivacySettings = field(default_factory=PrivacySettings)
     agent_brain: AgentBrainSettings = field(default_factory=AgentBrainSettings)
+    codex: CodexSettings = field(default_factory=CodexSettings)
+    notifications: NotificationSettings = field(default_factory=NotificationSettings)
+    proactive_agent: ProactiveAgentSettings = field(default_factory=ProactiveAgentSettings)
 
     @classmethod
     def from_mapping(cls, raw: Mapping[str, Any]) -> "Settings":
@@ -108,6 +145,10 @@ class Settings:
         storage = _section(raw, "storage")
         privacy = _section(raw, "privacy")
         brain = _section(raw, "agent_brain")
+        codex = _section(raw, "codex")
+        investigation = _section(codex, "investigation")
+        notifications = _section(raw, "notifications")
+        proactive = _section(raw, "proactive_agent")
 
         settings = cls(
             agent=AgentSettings(
@@ -147,6 +188,27 @@ class Settings:
                 retain_screenshots_days=_integer(privacy, "retain_screenshots_days", 1),
             ),
             agent_brain=AgentBrainSettings(enabled=_bool(brain, "enabled", False)),
+            codex=CodexSettings(
+                enabled=_bool(codex, "enabled", True),
+                investigation=CodexInvestigationSettings(
+                    enabled=_bool(investigation, "enabled", True),
+                    mode=_string(investigation, "mode", "read_only").lower(),
+                    timeout_seconds=_number(investigation, "timeout_seconds", 120.0),
+                    max_invocations=_integer(investigation, "max_invocations", 3),
+                    window_seconds=_number(investigation, "window_seconds", 3600.0),
+                    auto_investigate=_bool(investigation, "auto_investigate", False),
+                ),
+            ),
+            notifications=NotificationSettings(
+                enabled=_bool(notifications, "enabled", True),
+                minimum_priority=_priority(notifications, "minimum_priority", 30),
+                cooldown_seconds=_number(notifications, "cooldown_seconds", 300.0),
+                dedup_window_seconds=_number(notifications, "dedup_window_seconds", 600.0),
+            ),
+            proactive_agent=ProactiveAgentSettings(
+                enabled=_bool(proactive, "enabled", True),
+                notify_on=_strings(proactive, "notify_on", ProactiveAgentSettings.notify_on),
+            ),
         )
         settings.validate()
         return settings
@@ -169,6 +231,21 @@ class Settings:
             raise ConfigError("file_monitor.paths must not be empty when monitoring is enabled")
         if self.privacy.retain_screenshots_days < 0:
             raise ConfigError("privacy.retain_screenshots_days cannot be negative")
+        investigation = self.codex.investigation
+        if investigation.mode != "read_only":
+            raise ConfigError("codex.investigation.mode must be read_only")
+        if investigation.timeout_seconds <= 0:
+            raise ConfigError("codex.investigation.timeout_seconds must be greater than zero")
+        if investigation.max_invocations <= 0:
+            raise ConfigError("codex.investigation.max_invocations must be greater than zero")
+        if investigation.window_seconds <= 0:
+            raise ConfigError("codex.investigation.window_seconds must be greater than zero")
+        if self.notifications.cooldown_seconds < 0:
+            raise ConfigError("notifications.cooldown_seconds cannot be negative")
+        if self.notifications.dedup_window_seconds < 0:
+            raise ConfigError("notifications.dedup_window_seconds cannot be negative")
+        if self.notifications.minimum_priority not in {10, 20, 30, 40}:
+            raise ConfigError("notifications.minimum_priority must be a valid priority")
 
 
 def load_settings(
@@ -231,6 +308,18 @@ def _integer(section: Mapping[str, Any], name: str, default: int) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
         raise ConfigError(f"{name} must be an integer")
     return value
+
+
+def _priority(section: Mapping[str, Any], name: str, default: int) -> int:
+    value = section.get(name, default)
+    try:
+        if isinstance(value, str):
+            return {"DEBUG": 10, "NORMAL": 20, "IMPORTANT": 30, "CRITICAL": 40}[value.upper()]
+        if isinstance(value, bool):
+            raise ValueError
+        return int(value)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ConfigError(f"{name} must be a valid priority") from exc
 
 
 def _strings(section: Mapping[str, Any], name: str, default: tuple[str, ...]) -> tuple[str, ...]:

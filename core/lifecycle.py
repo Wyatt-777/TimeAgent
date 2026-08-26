@@ -11,7 +11,7 @@ from typing import Protocol, Sequence
 from config.settings import Settings
 
 from .dispatcher import Dispatcher
-from .event import Event, EventType
+from .event import Event, EventType, Priority
 from .event_bus import EventBus
 from .event_store import EventStore
 from .rule_engine import RuleEngine
@@ -37,10 +37,12 @@ class Runtime:
     ) -> None:
         settings.validate()
         from alerts import AlertInbox, AlertService, AlertStore
+        from alerts.policy import NotificationPolicy
         from notifications import NotificationManager
         from agent.audit_log import AuditLog
         from agent.codex_launcher import CodexLauncher
         from agent.investigation_coordinator import InvestigationCoordinator
+        from agent.investigation_limits import InvocationBudget, InvocationLimiter
         from agent.investigation_service import InvestigationService
         from workspace.session_reporter import SessionCompletionReporter
 
@@ -50,7 +52,15 @@ class Runtime:
         self.event_store = EventStore(settings.storage.sqlite_path)
         self.session_store = SessionStore(settings.storage.sqlite_path)
         self.alert_store = AlertStore(settings.storage.sqlite_path)
-        self.alert_service = AlertService(self.alert_store)
+        self.alert_service = AlertService(
+            self.alert_store,
+            policy=NotificationPolicy(
+                enabled=settings.notifications.enabled,
+                minimum_priority=Priority(settings.notifications.minimum_priority),
+                cooldown_seconds=settings.notifications.cooldown_seconds,
+                dedup_window_seconds=settings.notifications.dedup_window_seconds,
+            ),
+        )
         self.alert_inbox = AlertInbox(self.alert_store)
         self.notification_manager = NotificationManager(self.alert_service)
         self.session_completion_reporter = session_completion_reporter or SessionCompletionReporter(
@@ -61,9 +71,18 @@ class Runtime:
             event_store=self.event_store,
             alert_store=self.alert_store,
             service=InvestigationService(
-                launcher=CodexLauncher(),
+                launcher=CodexLauncher(
+                    timeout_seconds=settings.codex.investigation.timeout_seconds,
+                ),
+                limiter=InvocationLimiter(
+                    InvocationBudget(
+                        max_invocations=settings.codex.investigation.max_invocations,
+                        window_seconds=settings.codex.investigation.window_seconds,
+                    )
+                ),
                 audit_log=AuditLog(Path(settings.storage.log_path) / "investigations.jsonl"),
             ),
+            enabled=settings.codex.enabled and settings.codex.investigation.enabled,
         )
         self.rule_engine = RuleEngine(settings.process_monitor.important_processes)
         self.dispatcher = Dispatcher(
@@ -147,7 +166,11 @@ class Runtime:
                 self.logger.warning("Alert %s was not notified: %s", result.alert.id, delivery.reason)
 
     def _handle_analyze(self, event: Event) -> None:
-        if event.type is not EventType.CODING_SESSION_FINISHED:
+        if (
+            event.type is not EventType.CODING_SESSION_FINISHED
+            or not self.settings.proactive_agent.enabled
+            or event.type.value not in self.settings.proactive_agent.notify_on
+        ):
             return
         try:
             report = self.session_completion_reporter.report(event)  # type: ignore[attr-defined]

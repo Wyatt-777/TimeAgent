@@ -32,16 +32,20 @@ class InvestigationCoordinator:
         alert_store: AlertStore,
         service: InvestigationService,
         context_builder: ContextBuilder | None = None,
+        enabled: bool = True,
     ) -> None:
         self.event_store = event_store
         self.alert_store = alert_store
         self.service = service
         self.context_builder = context_builder or ContextBuilder(event_store)
+        self.enabled = enabled
         self._pending: dict[str, PendingInvestigation] = {}
 
     def enqueue_alert(self, alert: Alert, event: Event) -> InvestigationTask | None:
         if not isinstance(alert, Alert) or not isinstance(event, Event):
             raise TypeError("alert and event are required")
+        if not self.enabled:
+            return None
         if event.type is not EventType.TEST_FAILED_REPEATEDLY:
             return None
         project_path = event.data.get("project_path")
