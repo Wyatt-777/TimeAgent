@@ -32,12 +32,24 @@ class Runtime:
         logger: logging.Logger | None = None,
     ) -> None:
         settings.validate()
+        from alerts import AlertInbox, AlertService, AlertStore
+        from notifications import NotificationManager
+
         self.settings = settings
         self.logger = logger or logging.getLogger("local_pc_agent")
         self.event_bus = EventBus()
         self.event_store = EventStore(settings.storage.sqlite_path)
+        self.alert_store = AlertStore(settings.storage.sqlite_path)
+        self.alert_service = AlertService(self.alert_store)
+        self.alert_inbox = AlertInbox(self.alert_store)
+        self.notification_manager = NotificationManager(self.alert_service)
         self.rule_engine = RuleEngine(settings.process_monitor.important_processes)
-        self.dispatcher = Dispatcher(self.event_bus, self.event_store, self.rule_engine)
+        self.dispatcher = Dispatcher(
+            self.event_bus,
+            self.event_store,
+            self.rule_engine,
+            on_alert=self._handle_alert,
+        )
         if sensors is None:
             from sensors.coding_agent_monitor import CodingAgentMonitor
             from sensors.file_monitor import FileMonitor
@@ -76,12 +88,14 @@ class Runtime:
                 for sensor in reversed(started):
                     sensor.stop(timeout=2)
                 self.dispatcher.stop(timeout=2)
+                self.alert_store.close()
                 self.event_store.close()
                 raise
 
     def shutdown(self, timeout: float | None = 5) -> None:
         with self._lock:
             if not self._started:
+                self.alert_store.close()
                 self.event_store.close()
                 return
             self.logger.info("Stopping Local PC Agent")
@@ -93,7 +107,15 @@ class Runtime:
             self.dispatcher.dispatch_once(timeout=0)
             self.event_bus.shutdown()
             self.event_store.close()
+            self.alert_store.close()
             self._started = False
+
+    def _handle_alert(self, event: Event) -> None:
+        result = self.alert_service.create_from_event(event)
+        if result.created and result.alert is not None:
+            delivery = self.notification_manager.deliver(result.alert)
+            if not delivery.sent:
+                self.logger.warning("Alert %s was not notified: %s", result.alert.id, delivery.reason)
 
     def _drain_events(self) -> None:
         while self.event_bus.qsize() > 0:

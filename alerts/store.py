@@ -105,6 +105,19 @@ class AlertStore:
             ).fetchall()
         return [self._row_to_alert(row) for row in rows]
 
+    def list_pending(self, *, limit: int = 100) -> list[Alert]:
+        """Return alerts that still need attention in the Inbox."""
+        if limit <= 0:
+            raise ValueError("limit must be greater than zero")
+        statuses = tuple(status.value for status in AlertStatus if status not in {AlertStatus.RESOLVED, AlertStatus.IGNORED})
+        placeholders = ", ".join("?" for _ in statuses)
+        with self._lock:
+            rows = self._connection.execute(
+                f"SELECT * FROM alerts WHERE status IN ({placeholders}) ORDER BY created_at DESC LIMIT ?",
+                (*statuses, limit),
+            ).fetchall()
+        return [self._row_to_alert(row) for row in rows]
+
     def update_status(self, alert_id: str, status: AlertStatus) -> Alert:
         status = AlertStatus(status)
         with self._lock, self._connection:
