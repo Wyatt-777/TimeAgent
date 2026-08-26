@@ -26,7 +26,7 @@ python main.py
 python main.py --once
 ```
 
-当前已完成 Task 001–011：项目 Bootstrap、配置加载、统一 Event Model、Event Bus、SQLite Event Store、三类 Monitor、Rule Engine、Dispatcher 和 Graceful Shutdown。当前阶段先执行 5 分钟短时验收；项目整体完成后再执行正式长时稳定性验收。
+当前已完成 v0.1 基础运行时，以及 v0.2 Task 101：可替换的 LLM Provider 接口和离线 MockProvider。Agent Brain 默认仍关闭；当前阶段先执行 5 分钟短时验收，项目整体完成后再执行正式长时稳定性验收。
 
 运行当前阶段的 5 分钟短测：
 
