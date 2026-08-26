@@ -102,3 +102,110 @@ def test_repeated_failure_investigation_e2e_is_read_only_and_audited(tmp_path) -
     assert audit.records()[0].actor == "codex_investigation"
     assert audit.records()[0].metadata["task_id"] == task.task_id
     assert "raw" not in audit.records()[0].metadata
+
+
+def test_missing_codex_is_converted_to_audited_failure(tmp_path) -> None:
+    task, context = _task_context(tmp_path)
+    approval = InvestigationApproval(InvestigationApprovalMode.MANUAL)
+    approval.approve(task.task_id)
+    audit = AuditLog()
+
+    run = InvestigationService(
+        launcher=CodexLauncher(codex_command=str(tmp_path / "missing-codex")),
+        approval=approval,
+        audit_log=audit,
+    ).run(task, context)
+
+    assert run.status is InvestigationRunStatus.FAILED
+    assert run.launch is not None
+    assert run.launch.status.value == "error"
+    assert audit.records()[0].execution_status == "failed"
+
+
+def test_unexpected_launcher_error_is_converted_to_audited_failure(tmp_path) -> None:
+    task, context = _task_context(tmp_path)
+    approval = InvestigationApproval(InvestigationApprovalMode.MANUAL)
+    approval.approve(task.task_id)
+    audit = AuditLog()
+
+    class BrokenLauncher:
+        def launch(self, _task, _context):
+            raise RuntimeError("MCP startup failed")
+
+    run = InvestigationService(
+        launcher=BrokenLauncher(),  # type: ignore[arg-type]
+        approval=approval,
+        audit_log=audit,
+    ).run(task, context)
+
+    assert run.status is InvestigationRunStatus.FAILED
+    assert run.launch is None
+    assert "MCP startup failed" in (run.error or "")
+    assert audit.records()[0].error == run.error
+
+
+def test_timeout_is_audited_without_raising(tmp_path) -> None:
+    task, context = _task_context(tmp_path)
+    approval = InvestigationApproval(InvestigationApprovalMode.MANUAL)
+    approval.approve(task.task_id)
+    audit = AuditLog()
+
+    def runner(command, **kwargs):
+        raise subprocess.TimeoutExpired(command, kwargs["timeout"], output="partial")
+
+    run = InvestigationService(
+        launcher=CodexLauncher(runner=runner, timeout_seconds=1),
+        approval=approval,
+        audit_log=audit,
+    ).run(task, context)
+
+    assert run.status is InvestigationRunStatus.TIMED_OUT
+    assert audit.records()[0].execution_status == "timed_out"
+
+
+def test_invalid_json_and_nonzero_exit_are_safe_failures(tmp_path) -> None:
+    for returncode, stdout, stderr in ((0, "not json", ""), (2, "", "mcp startup failed")):
+        task, context = _task_context(tmp_path)
+        approval = InvestigationApproval(InvestigationApprovalMode.MANUAL)
+        approval.approve(task.task_id)
+
+        def runner(command, **kwargs):
+            return subprocess.CompletedProcess(command, returncode, stdout=stdout, stderr=stderr)
+
+        run = InvestigationService(
+            launcher=CodexLauncher(runner=runner),
+            approval=approval,
+        ).run(task, context)
+
+        assert run.status is InvestigationRunStatus.FAILED
+        assert run.task.status.value == "failed"
+
+
+def test_invocation_limit_blocks_second_launch_and_preserves_service(tmp_path) -> None:
+    calls = []
+
+    def runner(command, **kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout='{"outcome":"inconclusive","summary":"not enough evidence"}',
+            stderr="",
+        )
+
+    service = InvestigationService(
+        launcher=CodexLauncher(runner=runner),
+        approval=InvestigationApproval(InvestigationApprovalMode.MANUAL),
+        limiter=InvocationLimiter(InvocationBudget(max_invocations=1, window_seconds=60)),
+    )
+    first_task, first_context = _task_context(tmp_path)
+    second_task, second_context = _task_context(tmp_path)
+    service.approval.approve(first_task.task_id)
+    service.approval.approve(second_task.task_id)
+
+    first = service.run(first_task, first_context)
+    second = service.run(second_task, second_context)
+
+    assert first.status is InvestigationRunStatus.COMPLETED
+    assert second.status is InvestigationRunStatus.LIMITED
+    assert len(calls) == 1

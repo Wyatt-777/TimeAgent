@@ -85,7 +85,13 @@ class InvestigationService:
             return run
 
         running = task.start()
-        launch = self.launcher.launch(running, context)
+        try:
+            launch = self.launcher.launch(running, context)
+        except Exception as exc:
+            failed = running.fail(f"{type(exc).__name__}: {exc}")
+            run = InvestigationRun(InvestigationRunStatus.FAILED, failed, error=failed.error)
+            self._audit(run)
+            return run
         if launch.status is LaunchStatus.TIMED_OUT:
             run = InvestigationRun(InvestigationRunStatus.TIMED_OUT, running.timeout(), launch=launch)
         elif not launch.successful:
