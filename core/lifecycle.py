@@ -147,11 +147,28 @@ class Runtime:
         context: object | None = None,
     ) -> object:
         """Run one queued investigation only after an explicit approval flag."""
-        return self.investigation_coordinator.run_for_alert(
+        from agent.investigation_service import InvestigationRunStatus
+
+        run = self.investigation_coordinator.run_for_alert(
             alert_id,
             approved=approved,
             context=context,  # type: ignore[arg-type]
         )
+        if run.status is not InvestigationRunStatus.BLOCKED:
+            alert = self.alert_store.get(alert_id)
+            if alert is not None:
+                delivery = self.notification_manager.deliver_follow_up(
+                    alert,
+                    title="Codex investigation result",
+                    message=_investigation_message(run),
+                )
+                if not delivery.sent:
+                    self.logger.warning(
+                        "Investigation result for alert %s was not notified: %s",
+                        alert_id,
+                        delivery.reason,
+                    )
+        return run
 
     def _drain_events(self) -> None:
         while self.event_bus.qsize() > 0:
@@ -170,3 +187,19 @@ def configure_logging(settings: Settings) -> None:
         format="[%(asctime)s] %(levelname)-8s %(message)s",
         datefmt="%H:%M:%S",
     )
+
+
+def _investigation_message(run: object) -> str:
+    """Build a bounded user-facing message from a structured investigation run."""
+    result = getattr(run, "result", None)
+    if result is not None:
+        summary = str(result.summary).strip()
+        root_cause = getattr(result, "root_cause", None)
+        if isinstance(root_cause, str) and root_cause.strip():
+            return f"{summary} Possible root cause: {root_cause.strip()}"[:500]
+        return summary[:500]
+    error = getattr(run, "error", None)
+    status = getattr(getattr(run, "status", None), "value", "unknown")
+    if isinstance(error, str) and error.strip():
+        return f"Investigation {status}: {error.strip()}"[:500]
+    return f"Investigation finished with status: {status}."

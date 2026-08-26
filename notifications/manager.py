@@ -45,3 +45,17 @@ class NotificationManager:
             return DeliveryResult(alert.id, False, "notification_failed", notification)
         self.alert_service.mark_notified(alert, now=now)
         return DeliveryResult(alert.id, True, "sent", notification)
+
+    def deliver_follow_up(self, alert: Alert, *, title: str, message: str) -> DeliveryResult:
+        """Deliver an explicit investigation update without changing alert status.
+
+        A user-approved investigation is a follow-up to the original alert. It
+        must not be suppressed by the original alert's cooldown or reset an
+        ``INVESTIGATING``/``RESOLVED`` status back to ``NOTIFIED``.
+        """
+        if not isinstance(alert, Alert):
+            raise TypeError("alert must be an Alert")
+        notification = self.adapter.send(NotificationRequest(title=title, message=message))
+        if not notification.delivered:
+            return DeliveryResult(alert.id, False, "notification_failed", notification)
+        return DeliveryResult(alert.id, True, "sent", notification)

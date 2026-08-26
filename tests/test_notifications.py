@@ -57,3 +57,30 @@ def test_successful_notification_marks_alert_notified(tmp_path) -> None:
         assert result.sent is True
         assert store.get(created.alert.id).status is AlertStatus.NOTIFIED
         assert manager.deliver(created.alert, now=now + timedelta(seconds=1)).sent is False
+
+
+def test_follow_up_notification_bypasses_cooldown_and_preserves_status(tmp_path) -> None:
+    now = datetime(2026, 8, 26, 10, 0, tzinfo=timezone.utc)
+    received = []
+    with AlertStore(tmp_path / "alerts.db") as store:
+        service = AlertService(store)
+        created = service.create_from_event(event(), now=now)
+        manager = NotificationManager(
+            service,
+            adapter=WindowsNotificationAdapter(backend=received.append),
+        )
+        manager.deliver(created.alert, now=now)
+        investigating = store.update_status(created.alert.id, AlertStatus.INVESTIGATING)
+
+        result = manager.deliver_follow_up(
+            investigating,
+            title="Investigation complete",
+            message="A likely root cause was found.",
+        )
+
+        assert result.sent is True
+        assert received[-1] == NotificationRequest(
+            "Investigation complete",
+            "A likely root cause was found.",
+        )
+        assert store.get(created.alert.id).status is AlertStatus.INVESTIGATING
