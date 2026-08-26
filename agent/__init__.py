@@ -1,5 +1,6 @@
 """Optional Agent Brain components."""
 
+from .context_builder import AgentContext, ContextBuilder
 from .provider import (
     LLMProvider,
     LLMRequest,
@@ -10,6 +11,8 @@ from .provider import (
 )
 
 __all__ = [
+    "AgentContext",
+    "ContextBuilder",
     "LLMProvider",
     "LLMRequest",
     "LLMResponse",
