@@ -1,6 +1,7 @@
 """Explicitly configured workspace resolution."""
 
 from .resolver import Workspace, WorkspaceMatch, WorkspaceResolver
+from .tests import TestRunResult, TestRunStatus, TestRunner, parse_pytest_summary
 from .git import (
     GitCommandError,
     GitDiffFile,
@@ -20,6 +21,10 @@ __all__ = [
     "Workspace",
     "WorkspaceMatch",
     "WorkspaceResolver",
+    "TestRunResult",
+    "TestRunStatus",
+    "TestRunner",
+    "parse_pytest_summary",
     "parse_diff_numstat",
     "parse_status",
 ]
