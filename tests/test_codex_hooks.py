@@ -2,6 +2,7 @@ import subprocess
 
 from core.event import EventType, Priority
 from core.event_bus import EventBus
+from core.event_store import EventStore
 from integrations.codex.hooks import (
     HookAdapter,
     HookAdapterError,
@@ -95,6 +96,19 @@ def test_hook_adapter_publishes_tool_activity() -> None:
     assert event.type is EventType.CODEX_TOOL_ACTIVITY
     assert bus.consume(timeout=0.1) is event
     assert "tool_input" not in event.data
+
+
+def test_hook_adapter_deduplicates_repeated_lifecycle_payloads(tmp_path) -> None:
+    payload = {"hook_event_name": "SessionStart", "session_id": "thr_123", "cwd": "D:/project"}
+    with EventStore(tmp_path / "agent.db") as store:
+        adapter = HookAdapter(event_store=store)
+
+        first = adapter.handle(payload)
+        second = adapter.handle(payload)
+
+        assert first is not None and second is not None
+        assert first.id == second.id
+        assert store.count() == 1
 
 
 def test_disabled_hook_adapter_is_a_noop() -> None:

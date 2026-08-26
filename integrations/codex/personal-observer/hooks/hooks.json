@@ -1,0 +1,31 @@
+{
+  "description": "Optional read-only lifecycle signals for Local PC Agent.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/hooks/hook_entry.py\"",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\hooks\\hook_entry.py\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "other",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/hooks/hook_entry.py\"",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\hooks\\hook_entry.py\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}

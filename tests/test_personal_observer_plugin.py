@@ -54,3 +54,17 @@ def test_personal_observer_includes_c3_workflows_and_commands() -> None:
     readme = (PLUGIN_ROOT / "README.md").read_text(encoding="utf-8")
     assert "clean-machine packaging" in readme
     assert "read-only" in readme
+
+
+def test_personal_observer_hook_registration_is_optional_and_session_only() -> None:
+    hooks = json.loads((PLUGIN_ROOT / "hooks" / "hooks.json").read_text(encoding="utf-8"))
+
+    assert set(hooks["hooks"]) == {"SessionStart", "SessionEnd"}
+    assert hooks["hooks"]["SessionStart"][0]["matcher"] == "startup|resume|clear|compact"
+    assert hooks["hooks"]["SessionEnd"][0]["matcher"] == "other"
+    for event_groups in hooks["hooks"].values():
+        handler = event_groups[0]["hooks"][0]
+        assert handler["type"] == "command"
+        assert handler["timeout"] == 3
+        assert "hook_entry.py" in handler["commandWindows"]
+    assert (PLUGIN_ROOT / "hooks" / "hook_entry.py").is_file()

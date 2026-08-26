@@ -12,6 +12,7 @@ workflows for status, event investigation, and Coding Agent session review.
 - `commands/observer-status.md`: status entry point
 - `commands/recent-events.md`: recent event entry point
 - `commands/investigate-latest.md`: latest-context investigation entry point
+- `hooks/hooks.json`: optional `SessionStart` and `SessionEnd` lifecycle signals
 
 The plugin does not own Runtime state. The MCP server reads the explicitly
 configured Local PC Agent SQLite database and workspace. All tools and
@@ -22,3 +23,8 @@ investigation.
 The current `.mcp.json` is configured for the local Windows checkout at
 `D:/trackTime/local-pc-agent`. A clean-machine packaging and installation test
 is intentionally deferred to C308-C309.
+
+Hooks are optional and best-effort. They write only normalized lifecycle metadata
+to the Local PC Agent SQLite database; Hook errors are swallowed so Observer and
+the process-based session monitor continue to work. After installation, Codex
+requires Hook trust review before these commands run.

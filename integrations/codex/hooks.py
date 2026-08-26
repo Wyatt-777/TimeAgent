@@ -9,6 +9,7 @@ from typing import Any, Callable, Mapping, Sequence
 
 from core.event import Event, EventType, Priority
 from core.event_bus import EventBus
+from core.event_store import EventStore
 
 
 SUPPORTED_HOOK_EVENTS = (
@@ -126,8 +127,15 @@ class HookAdapterError(ValueError):
 class HookAdapter:
     """Convert Codex Hook stdin payloads into normalized local Events."""
 
-    def __init__(self, event_bus: EventBus | None = None, *, enabled: bool = True) -> None:
+    def __init__(
+        self,
+        event_bus: EventBus | None = None,
+        *,
+        event_store: EventStore | None = None,
+        enabled: bool = True,
+    ) -> None:
         self.event_bus = event_bus
+        self.event_store = event_store
         self.enabled = enabled
 
     def adapt(self, payload: Mapping[str, Any]) -> Event | None:
@@ -146,18 +154,26 @@ class HookAdapter:
             if hook_name in {"SessionStart", "SessionEnd"}
             else Priority.NORMAL
         )
+        dedup_key = _dedup_key(payload, hook_name)
+        event_kwargs = {"id": _event_id(dedup_key)} if dedup_key is not None else {}
         return Event(
+            **event_kwargs,
             type=_EVENT_TYPES[hook_name],
             source="codex_hook_adapter",
             priority=priority,
             data=data,
-            metadata={"adapter": "codex_hook_adapter"},
+            metadata={
+                "adapter": "codex_hook_adapter",
+                **({"dedup_key": dedup_key} if dedup_key is not None else {}),
+            },
             timestamp=datetime.now(timezone.utc),
         )
 
     def handle(self, payload: Mapping[str, Any]) -> Event | None:
         """Adapt and publish one payload; malformed Hooks never affect the Runtime."""
         event = self.adapt(payload)
+        if event is not None and self.event_store is not None:
+            self.event_store.insert_if_absent(event)
         if event is not None and self.event_bus is not None:
             self.event_bus.publish(event)
         return event
@@ -184,3 +200,20 @@ def _parse_hooks_feature(output: str) -> bool | None:
         if len(parts) >= 3 and parts[0].casefold() == "hooks":
             return parts[-1].casefold() == "true"
     return None
+
+
+def _dedup_key(payload: Mapping[str, Any], hook_name: str) -> str | None:
+    session_id = payload.get("session_id")
+    if not isinstance(session_id, str) or not session_id.strip():
+        return None
+    if hook_name in {"SessionStart", "SessionEnd"}:
+        return f"codex:{session_id}:{hook_name}"
+    field = "tool_use_id" if hook_name in {"PreToolUse", "PermissionRequest", "PostToolUse"} else "turn_id"
+    value = payload.get(field)
+    if isinstance(value, str) and value.strip():
+        return f"codex:{session_id}:{hook_name}:{value}"
+    return None
+
+
+def _event_id(dedup_key: str | None) -> str | None:
+    return f"evt_{dedup_key.replace(':', '_')}" if dedup_key is not None else None

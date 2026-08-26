@@ -60,6 +60,28 @@ class EventStore:
                 ),
             )
 
+    def insert_if_absent(self, event: Event) -> bool:
+        """Insert an event unless its id already exists; return whether it was new."""
+        if not isinstance(event, Event):
+            raise TypeError("EventStore accepts Event instances only")
+        with self._lock, self._connection:
+            cursor = self._connection.execute(
+                """
+                INSERT OR IGNORE INTO events (id, type, source, timestamp, priority, data, metadata)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    event.id,
+                    event.type.value,
+                    event.source,
+                    event.timestamp.isoformat(),
+                    int(event.priority),
+                    _json_dumps(event.data),
+                    _json_dumps(event.metadata),
+                ),
+            )
+        return cursor.rowcount == 1
+
     def query(
         self,
         *,
