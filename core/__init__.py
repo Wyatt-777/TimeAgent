@@ -8,6 +8,7 @@ from .failure_tracker import TestFailureTracker
 from .lifecycle import Runtime, configure_logging
 from .migrations import Migration, MigrationError, MigrationRunner
 from .rule_engine import RuleAction, RuleEngine
+from .session_store import SessionStore
 
 __all__ = [
     "Event",
@@ -25,4 +26,5 @@ __all__ = [
     "Migration",
     "MigrationError",
     "MigrationRunner",
+    "SessionStore",
 ]

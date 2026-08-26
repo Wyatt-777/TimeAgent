@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from alerts import AlertInbox, AlertStore
 from core.event import Event, EventType
 from core.event_store import EventStore
+from core.session_store import SessionStore
 from integrations.mcp.observer_mcp.server import ObserverMcpServer
 from sensors.coding_agent_monitor import CodingAgentSession
 from workspace.git import GitStatus
@@ -96,5 +97,45 @@ def test_mcp_stdio_round_trip_and_invalid_tool(tmp_path) -> None:
         assert responses[0]["result"] == {}
         assert responses[1]["result"]["isError"] is True
     finally:
+        alert_store.close()
+        event_store.close()
+
+
+def test_mcp_reads_persisted_active_sessions(tmp_path) -> None:
+    database = tmp_path / "agent.db"
+    session = CodingAgentSession(
+        session_id="session_persisted",
+        agent_name="codex.exe",
+        pid=99,
+        started_at=datetime.now(timezone.utc),
+        project_path="D:/project",
+    )
+    event_store = EventStore(database)
+    alert_store = AlertStore(database)
+    session_store = SessionStore(database)
+    try:
+        session_store.upsert_active(session)
+        server = ObserverMcpServer(
+            event_store=event_store,
+            alert_inbox=AlertInbox(alert_store),
+            active_sessions=session_store.list_active,
+        )
+
+        response = server.handle({
+            "jsonrpc": "2.0",
+            "id": 5,
+            "method": "tools/call",
+            "params": {"name": "observer_get_active_session", "arguments": {}},
+        })
+
+        assert response["result"]["structuredContent"]["sessions"] == [{
+            "session_id": "session_persisted",
+            "agent_name": "codex.exe",
+            "pid": 99,
+            "started_at": session.started_at.isoformat(),
+            "project_path": "D:/project",
+        }]
+    finally:
+        session_store.close()
         alert_store.close()
         event_store.close()

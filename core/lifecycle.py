@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from datetime import datetime, timezone
 from typing import Protocol, Sequence
 
 from config.settings import Settings
@@ -13,6 +14,7 @@ from .event import Event, EventType
 from .event_bus import EventBus
 from .event_store import EventStore
 from .rule_engine import RuleEngine
+from .session_store import SessionStore
 
 
 class Sensor(Protocol):
@@ -39,6 +41,7 @@ class Runtime:
         self.logger = logger or logging.getLogger("local_pc_agent")
         self.event_bus = EventBus()
         self.event_store = EventStore(settings.storage.sqlite_path)
+        self.session_store = SessionStore(settings.storage.sqlite_path)
         self.alert_store = AlertStore(settings.storage.sqlite_path)
         self.alert_service = AlertService(self.alert_store)
         self.alert_inbox = AlertInbox(self.alert_store)
@@ -63,6 +66,7 @@ class Runtime:
                     self.event_bus,
                     settings.coding_agent_monitor,
                     workspace_resolver=WorkspaceResolver(settings.file_monitor.paths),
+                    session_store=self.session_store,
                 ),
                 FileMonitor(self.event_bus, settings.file_monitor),
                 WindowMonitor(self.event_bus, settings.window_monitor),
@@ -78,6 +82,7 @@ class Runtime:
             self.logger.info("Starting Local PC Agent")
             started: list[Sensor] = []
             try:
+                self.session_store.close_all_active(ended_at=datetime.now(timezone.utc))
                 for sensor in self.sensors:
                     sensor.start()
                     started.append(sensor)
@@ -90,6 +95,7 @@ class Runtime:
                 self.dispatcher.stop(timeout=2)
                 self.alert_store.close()
                 self.event_store.close()
+                self.session_store.close()
                 raise
 
     def shutdown(self, timeout: float | None = 5) -> None:
@@ -97,6 +103,7 @@ class Runtime:
             if not self._started:
                 self.alert_store.close()
                 self.event_store.close()
+                self.session_store.close()
                 return
             self.logger.info("Stopping Local PC Agent")
             for sensor in reversed(self.sensors):
@@ -107,6 +114,7 @@ class Runtime:
             self.dispatcher.dispatch_once(timeout=0)
             self.event_bus.shutdown()
             self.event_store.close()
+            self.session_store.close()
             self.alert_store.close()
             self._started = False
 

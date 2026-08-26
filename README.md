@@ -26,7 +26,7 @@ python main.py
 python main.py --once
 ```
 
-当前已完成 v0.1 基础运行时、v0.2 Task 101-106、v0.3 Task 201-208、C1 Task 101-108，以及 C2 Observer MCP 只读工具：可替换的 LLM Provider 接口、离线 MockProvider、上下文构建器、结构化决策安全解析、默认拒绝的审批策略、受策略保护的动作执行器、Agent 调用审计日志、Coding Agent Session 识别、显式项目路径关联、只读 Git 状态查询、只读 Git diff 统计、受限测试运行、重复失败高优先级事件、只读 Session Summary、Alert Inbox 的重要性/去重/冷却/通知策略、Windows 本地通知适配器、Runtime 告警集成，以及 Observer MCP 的状态、事件、告警、Session 和 Git 状态查询。Agent Brain 默认仍关闭；当前阶段先执行 5 分钟短时验收，项目整体完成后再执行正式长时稳定性验收。
+当前已完成 v0.1 基础运行时、v0.2 Task 101-106、v0.3 Task 201-208、C1 Task 101-108，以及 C2 Observer MCP 只读工具：可替换的 LLM Provider 接口、离线 MockProvider、上下文构建器、结构化决策安全解析、默认拒绝的审批策略、受策略保护的动作执行器、Agent 调用审计日志、Coding Agent Session 识别与 SQLite 持久化、显式项目路径关联、只读 Git 状态查询、只读 Git diff 统计、受限测试运行、重复失败高优先级事件、只读 Session Summary、Alert Inbox 的重要性/去重/冷却/通知策略、Windows 本地通知适配器、Runtime 告警集成，以及 Observer MCP 的状态、事件、告警、Session 和 Git 状态查询。Agent Brain 默认仍关闭；当前阶段先执行 5 分钟短时验收，项目整体完成后再执行正式长时稳定性验收。
 
 运行当前阶段的 5 分钟短测：
 

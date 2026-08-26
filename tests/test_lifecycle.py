@@ -4,6 +4,7 @@ from config.settings import Settings, StorageSettings
 from core.event import EventType
 from core.lifecycle import Runtime
 from core.event_store import EventStore
+from core.session_store import SessionStore
 
 
 class FakeSensor:
@@ -46,3 +47,18 @@ def test_runtime_shutdown_is_idempotent(tmp_path) -> None:
     runtime.shutdown()
 
     assert not runtime.is_running
+
+
+def test_runtime_wires_session_store_to_default_coding_monitor(tmp_path) -> None:
+    settings = Settings(storage=StorageSettings(sqlite_path=str(tmp_path / "agent.db")))
+    runtime = Runtime(settings)
+
+    try:
+        coding_monitor = next(
+            sensor for sensor in runtime.sensors if sensor.__class__.__name__ == "CodingAgentMonitor"
+        )
+        assert coding_monitor.session_store is runtime.session_store
+        with SessionStore(settings.storage.sqlite_path) as reader:
+            assert reader.schema_version == 3
+    finally:
+        runtime.shutdown()

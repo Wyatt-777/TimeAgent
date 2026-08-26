@@ -14,6 +14,7 @@ import psutil
 from config.settings import CodingAgentMonitorSettings
 from core.event import Event, EventType, Priority
 from core.event_bus import EventBus
+from core.session_store import SessionStore
 from workspace.resolver import WorkspaceResolver
 
 
@@ -49,10 +50,12 @@ class CodingAgentMonitor:
         event_bus: EventBus | None = None,
         settings: CodingAgentMonitorSettings | None = None,
         workspace_resolver: WorkspaceResolver | None = None,
+        session_store: SessionStore | None = None,
     ) -> None:
         self.event_bus = event_bus
         self.settings = settings or CodingAgentMonitorSettings()
         self.workspace_resolver = workspace_resolver
+        self.session_store = session_store
         self._known: dict[int, CodingAgentProcess] | None = None
         self._active: dict[int, CodingAgentSession] = {}
         self._stop_event = ThreadEvent()
@@ -63,10 +66,14 @@ class CodingAgentMonitor:
         if self._known is None:
             self._known = current
             now = datetime.now(timezone.utc)
+            if self.session_store is not None:
+                self.session_store.close_all_active(ended_at=now)
             self._active = {
                 pid: self._new_session(process, started_at=now)
                 for pid, process in current.items()
             }
+            for session in self._active.values():
+                self._persist_started(session)
             return []
 
         events: list[Event] = []
@@ -75,18 +82,22 @@ class CodingAgentMonitor:
         for pid in sorted(previous.keys() - current.keys()):
             session = self._active.pop(pid, None)
             if session is not None:
+                self._persist_finished(session, ended_at=now)
                 events.append(self._session_event(EventType.CODING_SESSION_FINISHED, session, now))
         for pid in sorted(current.keys() - previous.keys()):
             session = self._new_session(current[pid], started_at=now)
             self._active[pid] = session
+            self._persist_started(session)
             events.append(self._session_event(EventType.CODING_SESSION_STARTED, session, now))
         for pid in sorted(previous.keys() & current.keys()):
             if _identity_changed(previous[pid], current[pid]):
                 old_session = self._active.pop(pid, None)
                 if old_session is not None:
+                    self._persist_finished(old_session, ended_at=now)
                     events.append(self._session_event(EventType.CODING_SESSION_FINISHED, old_session, now))
                 new_session = self._new_session(current[pid], started_at=now)
                 self._active[pid] = new_session
+                self._persist_started(new_session)
                 events.append(self._session_event(EventType.CODING_SESSION_STARTED, new_session, now))
 
         self._known = current
@@ -114,6 +125,12 @@ class CodingAgentMonitor:
         self._stop_event.set()
         if self._thread is not None:
             self._thread.join(timeout=timeout)
+            if self._thread.is_alive():
+                return
+        ended_at = datetime.now(timezone.utc)
+        for session in self._active.values():
+            self._persist_finished(session, ended_at=ended_at)
+        self._active.clear()
 
     def _snapshot(self) -> dict[int, CodingAgentProcess]:
         names = {name.casefold() for name in self.settings.process_names}
@@ -185,6 +202,14 @@ class CodingAgentMonitor:
             return
         for event in events:
             self.event_bus.publish(event)
+
+    def _persist_started(self, session: CodingAgentSession) -> None:
+        if self.session_store is not None:
+            self.session_store.upsert_active(session)
+
+    def _persist_finished(self, session: CodingAgentSession, *, ended_at: datetime) -> None:
+        if self.session_store is not None:
+            self.session_store.mark_finished(session, ended_at=ended_at)
 
 
 def _identity_changed(previous: CodingAgentProcess, current: CodingAgentProcess) -> bool:

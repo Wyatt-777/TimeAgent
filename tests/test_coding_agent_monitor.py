@@ -3,6 +3,7 @@ import psutil
 from config.settings import CodingAgentMonitorSettings
 from core.event import EventType, Priority
 from core.event_bus import EventBus
+from core.session_store import SessionStore
 from sensors.coding_agent_monitor import CodingAgentMonitor
 from workspace.resolver import WorkspaceResolver
 
@@ -123,3 +124,23 @@ def test_monitor_does_not_request_cwd_for_every_process(monkeypatch) -> None:
     CodingAgentMonitor().scan_once()
 
     assert requested == [("pid", "name", "create_time")]
+
+
+def test_monitor_persists_active_and_finished_sessions(monkeypatch, tmp_path) -> None:
+    process = FakeProcess({"pid": 10, "name": "codex.exe", "create_time": 1.0})
+    snapshots = [[process], [], []]
+    monkeypatch.setattr("sensors.coding_agent_monitor.psutil.process_iter", lambda _attrs: snapshots.pop(0))
+
+    with SessionStore(tmp_path / "agent.db") as store:
+        monitor = CodingAgentMonitor(session_store=store)
+
+        assert monitor.scan_once() == []
+        assert [session.session_id for session in store.list_active()] == [monitor.active_sessions()[0].session_id]
+
+        finished = monitor.scan_once()
+
+        assert [event.type for event in finished] == [EventType.CODING_SESSION_FINISHED]
+        assert store.list_active() == []
+
+        monitor.scan_once()
+        assert store.list_active() == []

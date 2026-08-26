@@ -7,6 +7,7 @@ from pathlib import Path
 
 from alerts import AlertInbox, AlertStore
 from core.event_store import EventStore
+from core.session_store import SessionStore
 from integrations.mcp.observer_mcp.server import ObserverMcpServer
 from workspace.git import GitInspector
 from workspace.resolver import WorkspaceResolver
@@ -19,6 +20,7 @@ def main() -> int:
     args = parser.parse_args()
 
     event_store = EventStore(args.database)
+    session_store = SessionStore(args.database)
     alert_store = AlertStore(args.database)
     resolver = WorkspaceResolver([Path(args.workspace)])
     match = resolver.resolve(args.workspace)
@@ -28,11 +30,13 @@ def main() -> int:
         server = ObserverMcpServer(
             event_store=event_store,
             alert_inbox=AlertInbox(alert_store),
+            active_sessions=session_store.list_active,
             git_inspector=GitInspector(match.workspace),
         )
         server.serve_stdio()
     finally:
         alert_store.close()
+        session_store.close()
         event_store.close()
     return 0
 

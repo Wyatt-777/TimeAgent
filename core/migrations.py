@@ -122,7 +122,29 @@ def _create_alerts_schema(connection: sqlite3.Connection) -> None:
     connection.execute("CREATE INDEX IF NOT EXISTS idx_alerts_dedup_key ON alerts(dedup_key)")
 
 
+def _create_coding_sessions_schema(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS coding_sessions (
+            session_id TEXT PRIMARY KEY,
+            agent_name TEXT NOT NULL,
+            pid INTEGER NOT NULL,
+            started_at TEXT NOT NULL,
+            project_path TEXT,
+            ended_at TEXT
+        )
+        """
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_coding_sessions_started_at ON coding_sessions(started_at)"
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_coding_sessions_ended_at ON coding_sessions(ended_at)"
+    )
+
+
 DEFAULT_MIGRATIONS = (
     Migration(1, "create_events_schema", _create_events_schema),
     Migration(2, "create_alerts_schema", _create_alerts_schema),
+    Migration(3, "create_coding_sessions_schema", _create_coding_sessions_schema),
 )

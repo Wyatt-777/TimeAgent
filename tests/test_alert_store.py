@@ -26,7 +26,7 @@ def test_alert_store_persists_queries_and_status_changes(tmp_path) -> None:
         alert = make_alert()
         store.insert(alert)
 
-        assert store.schema_version == 2
+        assert store.schema_version == 3
         assert store.get(alert.id) == alert
         assert store.list(status=AlertStatus.NEW) == [alert]
         updated = store.update_status(alert.id, AlertStatus.ACKNOWLEDGED)

@@ -40,7 +40,7 @@ def test_store_initializes_inserts_and_queries_unicode_events(tmp_path) -> None:
 
 def test_store_creates_expected_indexes(tmp_path) -> None:
     with EventStore(tmp_path / "agent.db") as store:
-        assert store.schema_version == 2
+        assert store.schema_version == 3
         rows = store._connection.execute(
             "SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_events_%'"
         ).fetchall()
@@ -84,7 +84,7 @@ def test_existing_database_is_migrated_without_losing_events(tmp_path) -> None:
         )
 
     with EventStore(database) as store:
-        assert store.schema_version == 2
+        assert store.schema_version == 3
         assert store.count() == 1
         assert store.query()[0].id == first.id
 
