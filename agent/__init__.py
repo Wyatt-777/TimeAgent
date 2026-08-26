@@ -8,6 +8,7 @@ from .decision import (
     StructuredDecision,
     parse_decision,
 )
+from .executor import ActionExecutionResult, ActionExecutor, ExecutionStatus
 from .provider import (
     LLMProvider,
     LLMRequest,
@@ -27,6 +28,9 @@ __all__ = [
     "DecisionParseError",
     "StructuredDecision",
     "parse_decision",
+    "ActionExecutionResult",
+    "ActionExecutor",
+    "ExecutionStatus",
     "LLMProvider",
     "LLMRequest",
     "LLMResponse",
