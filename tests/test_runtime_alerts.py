@@ -6,6 +6,8 @@ from core.lifecycle import Runtime
 from agent.codex_launcher import CodexLauncher
 from sensors.file_monitor import FileMonitor
 from watchdog.events import FileModifiedEvent
+from workspace.session_reporter import SessionCompletionReport
+from workspace.summary import CodingSessionSummary
 
 
 def test_runtime_routes_alert_events_to_alert_store(tmp_path) -> None:
@@ -91,4 +93,54 @@ def test_runtime_does_not_notify_for_1000_file_modifications(tmp_path) -> None:
     assert events[0].data["count"] == 1000
     runtime.dispatcher.dispatch_once(timeout=0)
     assert received == []
+    runtime.shutdown()
+
+
+def test_runtime_reports_and_notifies_when_coding_session_finishes(tmp_path) -> None:
+    summary = CodingSessionSummary(
+        session_id="session_1",
+        agent_name="codex.exe",
+        project_path=str(tmp_path),
+        duration_seconds=30,
+        branch="main",
+        files_changed=2,
+        additions=10,
+        deletions=3,
+        test_status="passed",
+        tests_passed=12,
+    )
+
+    class FakeReporter:
+        def report(self, event):
+            return SessionCompletionReport(summary)
+
+    runtime = Runtime(
+        Settings(storage=StorageSettings(sqlite_path=str(tmp_path / "agent.db"))),
+        sensors=(),
+        session_completion_reporter=FakeReporter(),
+    )
+    received = []
+    runtime.notification_manager.adapter._backend = received.append
+    event = Event(
+        type=EventType.CODING_SESSION_FINISHED,
+        source="coding_agent_monitor",
+        data={
+            "session_id": "session_1",
+            "agent_name": "codex.exe",
+            "pid": 42,
+            "started_at": "2026-08-27T10:00:00+00:00",
+            "ended_at": "2026-08-27T10:00:30+00:00",
+            "project_path": str(tmp_path),
+        },
+    )
+
+    runtime.event_bus.publish(event)
+    result = runtime.dispatcher.dispatch_once(timeout=0)
+
+    assert result is not None
+    assert result.action.value == "ANALYZE"
+    assert runtime.last_session_report.summary.files_changed == 2
+    assert len(received) == 1
+    assert received[0].title == "Coding Agent session finished"
+    assert "12 passed" in received[0].message
     runtime.shutdown()

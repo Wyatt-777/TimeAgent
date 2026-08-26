@@ -20,6 +20,13 @@ def test_important_process_stop_is_analyzed() -> None:
     assert engine.classify(event) is RuleAction.ANALYZE
 
 
+def test_coding_session_finished_is_analyzed() -> None:
+    engine = RuleEngine()
+    event = Event(type=EventType.CODING_SESSION_FINISHED, source="coding_agent_monitor")
+
+    assert engine.classify(event) is RuleAction.ANALYZE
+
+
 def test_system_failure_is_alerted() -> None:
     engine = RuleEngine()
     event = Event(type=EventType.SYSTEM_DISK_LOW, source="system_monitor")

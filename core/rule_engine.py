@@ -26,6 +26,8 @@ class RuleEngine:
             raise TypeError("RuleEngine accepts Event instances only")
         if event.priority == Priority.DEBUG:
             return RuleAction.IGNORE
+        if event.type is EventType.CODING_SESSION_FINISHED:
+            return RuleAction.ANALYZE
         if event.type in {
             EventType.SYSTEM_CPU_HIGH,
             EventType.SYSTEM_MEMORY_HIGH,

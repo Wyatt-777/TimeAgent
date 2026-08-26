@@ -33,6 +33,7 @@ class Runtime:
         *,
         sensors: Sequence[Sensor] | None = None,
         logger: logging.Logger | None = None,
+        session_completion_reporter: object | None = None,
     ) -> None:
         settings.validate()
         from alerts import AlertInbox, AlertService, AlertStore
@@ -41,6 +42,7 @@ class Runtime:
         from agent.codex_launcher import CodexLauncher
         from agent.investigation_coordinator import InvestigationCoordinator
         from agent.investigation_service import InvestigationService
+        from workspace.session_reporter import SessionCompletionReporter
 
         self.settings = settings
         self.logger = logger or logging.getLogger("local_pc_agent")
@@ -51,6 +53,10 @@ class Runtime:
         self.alert_service = AlertService(self.alert_store)
         self.alert_inbox = AlertInbox(self.alert_store)
         self.notification_manager = NotificationManager(self.alert_service)
+        self.session_completion_reporter = session_completion_reporter or SessionCompletionReporter(
+            settings.file_monitor.paths
+        )
+        self.last_session_report = None
         self.investigation_coordinator = InvestigationCoordinator(
             event_store=self.event_store,
             alert_store=self.alert_store,
@@ -64,6 +70,7 @@ class Runtime:
             self.event_bus,
             self.event_store,
             self.rule_engine,
+            on_analyze=self._handle_analyze,
             on_alert=self._handle_alert,
         )
         if sensors is None:
@@ -138,6 +145,22 @@ class Runtime:
             delivery = self.notification_manager.deliver(result.alert)
             if not delivery.sent:
                 self.logger.warning("Alert %s was not notified: %s", result.alert.id, delivery.reason)
+
+    def _handle_analyze(self, event: Event) -> None:
+        if event.type is not EventType.CODING_SESSION_FINISHED:
+            return
+        try:
+            report = self.session_completion_reporter.report(event)  # type: ignore[attr-defined]
+        except Exception as exc:
+            self.logger.warning("Session summary was not created: %s", exc)
+            return
+        self.last_session_report = report
+        notification = self.notification_manager.deliver_message(
+            title="Coding Agent session finished",
+            message=report.summary.to_text()[:2_000],
+        )
+        if not notification.delivered:
+            self.logger.warning("Session summary was not notified: %s", notification.error)
 
     def run_investigation(
         self,

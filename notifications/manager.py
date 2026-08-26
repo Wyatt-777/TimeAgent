@@ -59,3 +59,7 @@ class NotificationManager:
         if not notification.delivered:
             return DeliveryResult(alert.id, False, "notification_failed", notification)
         return DeliveryResult(alert.id, True, "sent", notification)
+
+    def deliver_message(self, *, title: str, message: str) -> NotificationResult:
+        """Deliver a non-alert status message through the local adapter."""
+        return self.adapter.send(NotificationRequest(title=title, message=message))
