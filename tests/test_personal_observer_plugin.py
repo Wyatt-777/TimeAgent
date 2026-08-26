@@ -32,3 +32,25 @@ def test_observer_status_skill_has_required_frontmatter_and_read_only_boundary()
     assert "observer_get_status" in skill
     assert "strictly read-only" in skill
     assert "Never modify files" in skill
+
+
+def test_personal_observer_includes_c3_workflows_and_commands() -> None:
+    investigate = (PLUGIN_ROOT / "skills" / "investigate-event" / "SKILL.md").read_text(encoding="utf-8")
+    session_review = (PLUGIN_ROOT / "skills" / "coding-session-review" / "SKILL.md").read_text(encoding="utf-8")
+
+    assert "name: investigate-event" in investigate
+    assert "observer_get_pending_alerts" in investigate
+    assert "name: coding-session-review" in session_review
+    assert "observer_get_active_session" in session_review
+    assert "Never modify files" in investigate
+    assert "Never modify files" in session_review
+
+    command_names = {
+        path.name
+        for path in (PLUGIN_ROOT / "commands").glob("*.md")
+    }
+    assert command_names == {"observer-status.md", "recent-events.md", "investigate-latest.md"}
+
+    readme = (PLUGIN_ROOT / "README.md").read_text(encoding="utf-8")
+    assert "clean-machine packaging" in readme
+    assert "read-only" in readme
