@@ -14,6 +14,8 @@
 
 本机验证结果：Codex CLI `0.150.0-alpha.8` 的 `hooks` 功能为 `stable / true`，C4 Hook 单元测试和插件 Hook 结构测试通过。
 
-## 尚未完成：C407
+## C407：跨来源 Session 合并
 
-当前已实现重复 Hook 生命周期事件的幂等去重（稳定 event id + `INSERT OR IGNORE`）。尚未完成的是进程监控 Session 与 Codex Hook Session 的跨来源合并；这需要在 Runtime 内建立基于 cwd、时间窗口和来源的关联层。当前适配器尚未自动修改 Codex 用户配置，也不会让 Hook 成为 Observer 的单点依赖。
+已增加 `SessionMerger`，按 Hook 的 `cwd` 是否位于进程 Session 的项目路径内，并结合可配置时间窗口进行最佳匹配。匹配成功时 Observer MCP 返回一条逻辑 Session 并附带两个来源；匹配失败时保留 Hook-only 或 process-only 记录；已结束的 Hook Session 不会继续显示为活动 Session。重复 Hook 生命周期事件仍通过稳定 event id + `INSERT OR IGNORE` 幂等去重。
+
+当前适配器尚未自动修改 Codex 用户配置，也不会让 Hook 成为 Observer 的单点依赖。

@@ -10,6 +10,7 @@ from typing import Any, TextIO
 from alerts.inbox import AlertInbox
 from core.event import EventType
 from core.event_store import EventStore
+from integrations.codex.session_merge import MergedCodingSession, SessionMerger
 from sensors.coding_agent_monitor import CodingAgentSession
 from workspace.git import GitInspector
 
@@ -35,11 +36,13 @@ class ObserverMcpServer:
         alert_inbox: AlertInbox,
         active_sessions: Callable[[], Iterable[CodingAgentSession]] | None = None,
         git_inspector: GitInspector | None = None,
+        session_merger: SessionMerger | None = None,
     ) -> None:
         self.event_store = event_store
         self.alert_inbox = alert_inbox
         self.active_sessions = active_sessions or (lambda: ())
         self.git_inspector = git_inspector
+        self.session_merger = session_merger
 
     def handle(self, request: Mapping[str, Any]) -> dict[str, Any] | None:
         request_id = request.get("id")
@@ -160,30 +163,46 @@ class ObserverMcpServer:
                 "schema_version": self.event_store.schema_version,
                 "event_count": self.event_store.count(),
                 "pending_alert_count": len(self.alert_inbox.pending(limit=limit)),
-                "active_session_count": len(tuple(self.active_sessions())),
+                "active_session_count": len(self._sessions()),
             }
         if name == "observer_get_recent_events":
             return {"events": [event.to_dict() for event in self.event_store.query(limit=limit)]}
         if name == "observer_get_pending_alerts":
             return {"alerts": [alert.to_dict() for alert in self.alert_inbox.pending(limit=limit)]}
         if name == "observer_get_active_session":
+            sessions = []
+            for session in self._sessions():
+                item = {
+                    "session_id": session.session_id,
+                    "agent_name": session.agent_name,
+                    "pid": session.pid,
+                    "started_at": session.started_at.isoformat(),
+                    "project_path": session.project_path,
+                }
+                if isinstance(session, MergedCodingSession):
+                    item.update(
+                        {
+                            "codex_session_id": session.codex_session_id,
+                            "process_session_id": session.process_session_id,
+                            "sources": list(session.sources),
+                        }
+                    )
+                sessions.append(item)
             return {
-                "sessions": [
-                    {
-                        "session_id": session.session_id,
-                        "agent_name": session.agent_name,
-                        "pid": session.pid,
-                        "started_at": session.started_at.isoformat(),
-                        "project_path": session.project_path,
-                    }
-                    for session in self.active_sessions()
-                ]
+                "sessions": sessions
             }
         if name == "observer_get_git_status":
             if self.git_inspector is None:
                 return {"available": False, "reason": "no explicitly configured workspace"}
             return {"available": True, **self.git_inspector.status().to_dict()}
         raise ObserverMcpError(f"unknown tool: {name}")
+
+    def _sessions(self) -> tuple[CodingAgentSession | MergedCodingSession, ...]:
+        sessions = tuple(self.active_sessions())
+        if self.session_merger is None:
+            return sessions
+        hook_events = self.event_store.query(limit=100, source="codex_hook_adapter")
+        return self.session_merger.merge(sessions, hook_events)
 
     @staticmethod
     def _result(request_id: Any, result: dict[str, Any]) -> dict[str, Any]:

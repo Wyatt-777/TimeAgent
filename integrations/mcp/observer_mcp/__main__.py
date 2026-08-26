@@ -8,6 +8,7 @@ from pathlib import Path
 from alerts import AlertInbox, AlertStore
 from core.event_store import EventStore
 from core.session_store import SessionStore
+from integrations.codex.session_merge import SessionMerger
 from integrations.mcp.observer_mcp.server import ObserverMcpServer
 from workspace.git import GitInspector
 from workspace.resolver import WorkspaceResolver
@@ -32,6 +33,7 @@ def main() -> int:
             alert_inbox=AlertInbox(alert_store),
             active_sessions=session_store.list_active,
             git_inspector=GitInspector(match.workspace),
+            session_merger=SessionMerger(),
         )
         server.serve_stdio()
     finally:

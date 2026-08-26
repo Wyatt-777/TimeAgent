@@ -7,6 +7,7 @@ from core.event import Event, EventType
 from core.event_store import EventStore
 from core.session_store import SessionStore
 from integrations.mcp.observer_mcp.server import ObserverMcpServer
+from integrations.codex.session_merge import SessionMerger
 from sensors.coding_agent_monitor import CodingAgentSession
 from workspace.git import GitStatus
 from workspace.resolver import Workspace
@@ -137,5 +138,50 @@ def test_mcp_reads_persisted_active_sessions(tmp_path) -> None:
         }]
     finally:
         session_store.close()
+        alert_store.close()
+        event_store.close()
+
+
+def test_mcp_merges_matching_process_and_hook_sessions(tmp_path) -> None:
+    database = tmp_path / "agent.db"
+    started_at = datetime(2026, 8, 27, 1, 0, tzinfo=timezone.utc)
+    process = CodingAgentSession(
+        session_id="process_session",
+        agent_name="codex.exe",
+        pid=99,
+        started_at=started_at,
+        project_path=str(tmp_path / "project"),
+    )
+    event_store = EventStore(database)
+    alert_store = AlertStore(database)
+    event_store.insert(
+        Event(
+            id="hook_start",
+            type=EventType.CODEX_SESSION_STARTED,
+            source="codex_hook_adapter",
+            timestamp=started_at,
+            data={"session_id": "thread_1", "cwd": str(tmp_path / "project"), "hook_event_name": "SessionStart"},
+        )
+    )
+    try:
+        server = ObserverMcpServer(
+            event_store=event_store,
+            alert_inbox=AlertInbox(alert_store),
+            active_sessions=lambda: (process,),
+            session_merger=SessionMerger(),
+        )
+        response = server.handle({
+            "jsonrpc": "2.0",
+            "id": 6,
+            "method": "tools/call",
+            "params": {"name": "observer_get_active_session", "arguments": {}},
+        })
+
+        sessions = response["result"]["structuredContent"]["sessions"]
+        assert len(sessions) == 1
+        assert sessions[0]["session_id"] == "process_session"
+        assert sessions[0]["codex_session_id"] == "thread_1"
+        assert sessions[0]["sources"] == ["process_monitor", "codex_hook_adapter"]
+    finally:
         alert_store.close()
         event_store.close()
