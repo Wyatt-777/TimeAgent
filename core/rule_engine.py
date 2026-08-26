@@ -31,6 +31,7 @@ class RuleEngine:
             EventType.SYSTEM_MEMORY_HIGH,
             EventType.SYSTEM_DISK_LOW,
             EventType.AGENT_ERROR,
+            EventType.TEST_FAILED_REPEATEDLY,
         }:
             return RuleAction.ALERT
         if event.type is EventType.PROCESS_STOPPED:

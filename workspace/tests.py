@@ -24,6 +24,7 @@ class TestRunStatus(str, Enum):
 @dataclass(frozen=True, slots=True)
 class TestRunResult:
     status: TestRunStatus
+    __test__ = False
     returncode: int | None
     duration_seconds: float
     passed: int = 0
