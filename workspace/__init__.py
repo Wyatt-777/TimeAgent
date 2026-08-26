@@ -2,6 +2,7 @@
 
 from .resolver import Workspace, WorkspaceMatch, WorkspaceResolver
 from .tests import TestRunResult, TestRunStatus, TestRunner, parse_pytest_summary
+from .summary import CodingSessionSummary, SessionSummaryBuilder
 from .git import (
     GitCommandError,
     GitDiffFile,
@@ -25,6 +26,8 @@ __all__ = [
     "TestRunStatus",
     "TestRunner",
     "parse_pytest_summary",
+    "CodingSessionSummary",
+    "SessionSummaryBuilder",
     "parse_diff_numstat",
     "parse_status",
 ]
