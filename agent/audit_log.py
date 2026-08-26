@@ -125,6 +125,39 @@ class AuditLog:
             )
         )
 
+    def record_investigation(
+        self,
+        *,
+        task: Any,
+        status: str,
+        result: Any = None,
+        error: str | None = None,
+    ) -> AuditRecord:
+        """Record investigation lifecycle without persisting raw model output."""
+        if not hasattr(task, "task_id") or not hasattr(task, "trigger_event_id"):
+            raise TypeError("task must be an InvestigationTask-like object")
+        metadata: dict[str, Any] = {
+            "task_id": task.task_id,
+            "trigger_event_id": task.trigger_event_id,
+            "project_path": task.project_path,
+            "reason": task.reason,
+        }
+        if result is not None and hasattr(result, "to_dict"):
+            metadata["result"] = result.to_dict()
+        summary = result.summary if result is not None and hasattr(result, "summary") else task.reason
+        return self.append(
+            AuditRecord(
+                actor="codex_investigation",
+                trigger="investigation",
+                action="codex_investigation",
+                approval_status="allowed" if status == "completed" else "not_started",
+                execution_status=status,
+                summary=summary,
+                error=error,
+                metadata=metadata,
+            )
+        )
+
     def records(self, *, limit: int | None = None) -> tuple[AuditRecord, ...]:
         if limit is not None and limit <= 0:
             raise ValueError("limit must be greater than zero")

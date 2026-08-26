@@ -30,6 +30,20 @@ from .investigation import (
     InvestigationStatus,
     InvestigationTask,
 )
+from .investigation_limits import InvestigationLimitExceeded, InvocationBudget, InvocationLimiter
+from .investigation_result import (
+    InvestigationOutcome,
+    InvestigationParseError,
+    InvestigationResult,
+    parse_investigation_result,
+)
+from .investigation_service import (
+    InvestigationApproval,
+    InvestigationApprovalMode,
+    InvestigationRun,
+    InvestigationRunStatus,
+    InvestigationService,
+)
 
 __all__ = [
     "AgentContext",
@@ -61,4 +75,16 @@ __all__ = [
     "InvestigationContextPackage",
     "InvestigationStatus",
     "InvestigationTask",
+    "InvestigationLimitExceeded",
+    "InvocationBudget",
+    "InvocationLimiter",
+    "InvestigationOutcome",
+    "InvestigationParseError",
+    "InvestigationResult",
+    "parse_investigation_result",
+    "InvestigationApproval",
+    "InvestigationApprovalMode",
+    "InvestigationRun",
+    "InvestigationRunStatus",
+    "InvestigationService",
 ]
